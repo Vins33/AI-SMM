@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+.env
+.pytest_cache/
+venv/
+.venv/
+.idea/
+.vscode/
+*docker_volumes/*
+*ollama_data_host/*
+*qdrant_data/*
+*postgres_data/*
+*qdrant_data_host/*
+*postgres_data_host/*
+*data/*
