@@ -47,7 +47,9 @@ source .venv/bin/activate
 ```bash
 pip install -r requirements.txt
 ```
-
+```bash
+uv sync
+```
 3. Crea un file `.env` nella root del progetto (es. per SERPAPI_API_KEY o altre variabili). Un esempio minimo:
 
 ```env
