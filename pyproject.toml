@@ -18,6 +18,7 @@ dependencies = [
     "langgraph>=0.6.7",
     "nest-asyncio>=1.6.0",
     "pandas>=2.3.2",
+    "plotly>=6.4.0",
     "pydantic-settings>=2.10.1",
     "python-multipart>=0.0.20",
     "qdrant-client>=1.15.1",

@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from src.api.endpoints import router
+from src.middleware.explainability import explainability_middleware
 from src.services.database import async_engine
 from src.services.models import Base
 
@@ -23,7 +24,7 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
-
+app.middleware("http")(explainability_middleware)
 app.include_router(router, prefix="/api", tags=["API"])
 
 @app.get("/")

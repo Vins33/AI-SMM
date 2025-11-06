@@ -160,7 +160,9 @@ multidict==6.6.4
 mypy-extensions==1.1.0
     # via typing-inspect
 narwhals==2.4.0
-    # via altair
+    # via
+    #   altair
+    #   plotly
 nest-asyncio==1.6.0
     # via classifier (pyproject.toml)
 numpy==2.3.3
@@ -184,6 +186,7 @@ packaging==25.0
     #   langchain-core
     #   langsmith
     #   marshmallow
+    #   plotly
     #   streamlit
 pandas==2.3.2
     # via
@@ -191,6 +194,8 @@ pandas==2.3.2
     #   streamlit
 pillow==11.3.0
     # via streamlit
+plotly==6.4.0
+    # via classifier (pyproject.toml)
 portalocker==3.2.0
     # via qdrant-client
 propcache==0.3.2
