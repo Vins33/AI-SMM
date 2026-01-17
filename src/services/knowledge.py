@@ -5,7 +5,7 @@ from serpapi import SerpApiClient
 from src.core.config import settings
 
 
-def google_search(query: str, num_results: int = 3) -> str:
+def google_search(query: str, num_results: int = 1) -> str:
     """
     Esegue una ricerca su Google usando SerpAPI e restituisce un contesto
     concatenando gli snippet dei risultati organici.
