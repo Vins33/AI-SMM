@@ -2,7 +2,6 @@
 
 Applicazione web per chattare con un agente finanziario AI basato su LangGraph, con supporto per analisi di titoli, ricerca web e knowledge base vettoriale.
 
-![WhatsApp-style UI](https://img.shields.io/badge/UI-WhatsApp%20Style-25D366?style=flat-square&logo=whatsapp)
 ![Python 3.12+](https://img.shields.io/badge/Python-3.12+-3776AB?style=flat-square&logo=python)
 ![NiceGUI](https://img.shields.io/badge/Framework-NiceGUI-00A0E4?style=flat-square)
 ![LangGraph](https://img.shields.io/badge/Agent-LangGraph-FF6B6B?style=flat-square)
