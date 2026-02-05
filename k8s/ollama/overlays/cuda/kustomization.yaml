@@ -1,0 +1,47 @@
+# k8s/ollama/overlays/cuda/kustomization.yaml
+# NVIDIA GPU (CUDA) overlay
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+nameSuffix: -cuda
+
+resources:
+  - ../../base
+
+patches:
+  - target:
+      kind: Deployment
+      name: ollama
+    patch: |-
+      - op: add
+        path: /metadata/annotations
+        value:
+          gpu-type: nvidia-cuda
+      - op: replace
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests:
+            memory: "8Gi"
+            cpu: "2000m"
+            nvidia.com/gpu: "1"
+          limits:
+            memory: "32Gi"
+            cpu: "8000m"
+            nvidia.com/gpu: "1"
+      - op: add
+        path: /spec/template/spec/runtimeClassName
+        value: nvidia
+      - op: add
+        path: /spec/template/spec/tolerations
+        value:
+          - key: nvidia.com/gpu
+            operator: Exists
+            effect: NoSchedule
+      - op: add
+        path: /spec/template/spec/nodeSelector
+        value:
+          accelerator: nvidia
+
+images:
+  - name: ollama/ollama
+    newTag: latest

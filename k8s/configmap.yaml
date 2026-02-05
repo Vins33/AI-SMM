@@ -13,15 +13,19 @@ data:
   LOG_LEVEL: "INFO"
   LOG_JSON_FORMAT: "true"
   
-  # LLM settings
+  # LLM settings (Ollama)
   LLM_MODEL_NAME: "gpt-oss:20b"
   LLM_TEMPERATURE: "0.1"
   LLM_KEEP_ALIVE: "4h"
   LLM_NUM_CTX: "16384"
   LLM_SEED: "42"
   LLM_TIMEOUT: "120"
+  # Ollama service URL (use service name, resolved by K8s DNS)
+  # For CUDA: ollama-cuda, for ROCm: ollama-rocm, for CPU: ollama-cpu
+  OLLAMA_BASE_URL: "http://ollama:11434"
   
   # Qdrant settings
+  QDRANT_HOST: "qdrant"
   QDRANT_PORT: "6333"
   QDRANT_TIMEOUT: "30"
   EMBEDDING_MODEL_NAME: "nomic-embed-text"

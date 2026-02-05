@@ -7,30 +7,83 @@ services:
     env_file:
       - .env
     depends_on:
-      - postgres_db
-      - qdrant
-      - ollama
+      postgres_db:
+        condition: service_started
+      qdrant:
+        condition: service_started
     volumes:
       - ./src:/app/src
       - ./data:/app/data
     command: ["python", "-m", "uvicorn", "src.main:fastapi_app", "--host", "0.0.0.0", "--port", "8000"]
     restart: unless-stopped
+    networks:
+      - classifier-net
 
-  ollama:
+  # Ollama con NVIDIA GPU (CUDA)
+  ollama-cuda:
     build: ./ollama_setup
     container_name: ollama
     ports:
       - "11434:11434"
     volumes:
       - ./ollama_data_host:/root/.ollama
+    environment:
+      - OLLAMA_DEVICE=cuda
     deploy:
       resources:
         reservations:
           devices:
             - driver: nvidia
-              count: 1
+              count: all
               capabilities: [gpu]
     restart: unless-stopped
+    networks:
+      classifier-net:
+        aliases:
+          - ollama
+    profiles:
+      - cuda
+
+  # Ollama con AMD GPU (ROCm)
+  ollama-rocm:
+    image: ollama/ollama:rocm
+    container_name: ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ./ollama_data_host:/root/.ollama
+      - ./ollama_setup/entrypoint.sh:/entrypoint.sh:ro
+    environment:
+      - OLLAMA_DEVICE=rocm
+    devices:
+      - /dev/kfd
+      - /dev/dri
+    restart: unless-stopped
+    entrypoint: ["/entrypoint.sh"]
+    networks:
+      classifier-net:
+        aliases:
+          - ollama
+    profiles:
+      - rocm
+
+  # Ollama solo CPU
+  ollama-cpu:
+    build: ./ollama_setup
+    container_name: ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ./ollama_data_host:/root/.ollama
+    environment:
+      - OLLAMA_DEVICE=cpu
+    restart: unless-stopped
+    networks:
+      classifier-net:
+        aliases:
+          - ollama
+    profiles:
+      - cpu
 
   qdrant:
     image: qdrant/qdrant:latest
@@ -41,6 +94,8 @@ services:
     volumes:
       - ./qdrant_data_host:/qdrant/storage
     restart: unless-stopped
+    networks:
+      - classifier-net
 
   postgres_db:
     image: postgres:16-alpine
@@ -54,3 +109,9 @@ services:
     volumes:
       - ./postgres_data_host:/var/lib/postgresql/data
     restart: unless-stopped
+    networks:
+      - classifier-net
+
+networks:
+  classifier-net:
+    driver: bridge

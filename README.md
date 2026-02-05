@@ -37,7 +37,10 @@ Applicazione web per chattare con un agente finanziario AI basato su LangGraph, 
 
 - Python 3.12+
 - Docker e Docker Compose
-- GPU NVIDIA (consigliato per Ollama)
+- GPU (opzionale):
+  - **NVIDIA**: Driver NVIDIA + nvidia-container-toolkit (CUDA)
+  - **AMD**: Driver ROCm
+  - **CPU**: Funziona senza GPU (più lento)
 
 ## Installazione
 
@@ -52,8 +55,13 @@ cd classifier
 cp .env.example .env
 # Modifica .env con le tue configurazioni
 
-# Avvia tutti i servizi
-docker compose up --build
+# Avvia con auto-detection GPU (consigliato)
+make docker-up
+
+# Oppure scegli manualmente:
+make docker-up-cuda   # NVIDIA GPU
+make docker-up-rocm   # AMD GPU
+make docker-up-cpu    # Solo CPU
 ```
 
 L'applicazione sarà disponibile su `http://localhost:8000`
@@ -75,7 +83,15 @@ make run-reload
 make build
 make push
 
-# Deploy (scegli ambiente)
+# Deploy Ollama (auto-detect GPU nel cluster)
+make deploy-ollama
+
+# Oppure scegli manualmente:
+make deploy-ollama-cuda   # NVIDIA GPU
+make deploy-ollama-rocm   # AMD GPU
+make deploy-ollama-cpu    # Solo CPU
+
+# Deploy app (scegli ambiente)
 make deploy-dev      # Development
 make deploy-staging  # Staging
 make deploy-prod     # Production
@@ -87,17 +103,33 @@ make k8s-status
 ## Comandi disponibili
 
 ```bash
-make help           # Mostra tutti i comandi disponibili
-make install        # Installa dipendenze production
-make dev            # Installa dipendenze dev
-make test           # Esegui test
-make test-cov       # Test con coverage
-make lint           # Linting
-make format         # Formatta codice
-make quality        # Tutti i quality check
-make build          # Build Docker image
-make deploy-dev     # Deploy su K8s dev
-make deploy-prod    # Deploy su K8s prod
+make help              # Mostra tutti i comandi disponibili
+make install           # Installa dipendenze production
+make dev               # Installa dipendenze dev
+make test              # Esegui test
+make test-cov          # Test con coverage
+make lint              # Linting
+make format            # Formatta codice
+make quality           # Tutti i quality check
+make build             # Build Docker image
+
+# Docker Compose (locale)
+make detect-gpu        # Rileva GPU disponibile
+make docker-up         # Avvia con auto-detection GPU
+make docker-up-cuda    # Avvia con NVIDIA GPU
+make docker-up-rocm    # Avvia con AMD GPU
+make docker-up-cpu     # Avvia solo CPU
+make docker-down       # Ferma tutti i servizi
+
+# Kubernetes
+make deploy-ollama     # Deploy Ollama (auto-detect GPU)
+make deploy-ollama-cuda
+make deploy-ollama-rocm
+make deploy-ollama-cpu
+make delete-ollama     # Elimina Ollama da K8s
+make k8s-detect-gpu    # Rileva GPU nel cluster K8s
+make deploy-dev        # Deploy app su K8s dev
+make deploy-prod       # Deploy app su K8s prod
 ```
 
 ## Test Kubernetes locale con Kind
@@ -128,8 +160,14 @@ kind create cluster --config kind-config.yaml
 docker build -t classifier-app:latest .
 kind load docker-image classifier-app:latest --name financial-agent-local
 
-# Deploy all-in-one (app + postgres + qdrant)
+# Deploy all-in-one (app + postgres + qdrant + ollama CPU)
 kubectl apply -f k8s/local/all-in-one.yaml
+
+# Per GPU support, usa lo script dedicato:
+./scripts/deploy-ollama.sh deploy cuda   # NVIDIA
+./scripts/deploy-ollama.sh deploy rocm   # AMD
+./scripts/deploy-ollama.sh deploy cpu    # CPU only
+./scripts/deploy-ollama.sh deploy        # Auto-detect
 
 # Verifica pods
 kubectl get pods -n financial-agent-local
@@ -137,6 +175,14 @@ kubectl get pods -n financial-agent-local
 # Accedi all'applicazione via port-forward
 kubectl port-forward -n financial-agent-local svc/financial-agent 8888:80
 # Apri http://localhost:8888
+```
+
+### Pull modelli su Ollama in K8s
+
+```bash
+# Connettiti al pod Ollama e scarica i modelli
+kubectl exec -n financial-agent-local -it deploy/ollama -- ollama pull gpt-oss:20b
+kubectl exec -n financial-agent-local -it deploy/ollama -- ollama pull nomic-embed-text
 ```
 
 ### Test health checks
@@ -342,9 +388,61 @@ pytest tests/
 | Servizio | Porta | Descrizione |
 |----------|-------|-------------|
 | app | 8000 | FastAPI + NiceGUI |
-| ollama | 11434 | LLM locale |
+| ollama-cuda | 11434 | LLM con NVIDIA GPU |
+| ollama-rocm | 11434 | LLM con AMD GPU |
+| ollama-cpu | 11434 | LLM solo CPU |
 | qdrant | 6333, 6334 | Vector database |
 | postgres_db | 5432 | Database relazionale |
+
+## GPU Auto-Detection
+
+Il sistema rileva automaticamente la GPU disponibile:
+
+### Docker Compose
+```bash
+# Rileva GPU locale
+./scripts/detect-gpu.sh
+
+# Output possibili:
+# 🔍 Hardware rilevato: cuda   (NVIDIA)
+# 🔍 Hardware rilevato: rocm   (AMD)
+# 🔍 Hardware rilevato: cpu    (nessuna GPU)
+
+# Avvia con detection automatica
+make docker-up
+```
+
+### Kubernetes
+```bash
+# Rileva GPU nel cluster K8s
+./scripts/deploy-ollama.sh detect
+
+# Deploy con auto-detection
+./scripts/deploy-ollama.sh deploy
+
+# O specifica manualmente
+./scripts/deploy-ollama.sh deploy cuda
+./scripts/deploy-ollama.sh deploy rocm
+./scripts/deploy-ollama.sh deploy cpu
+```
+
+### Struttura K8s per Ollama
+
+```
+k8s/ollama/
+├── base/                    # Configurazione base
+│   ├── deployment.yaml
+│   ├── service.yaml
+│   ├── pvc.yaml
+│   └── kustomization.yaml
+└── overlays/
+    ├── cuda/               # NVIDIA GPU
+    │   └── kustomization.yaml
+    ├── rocm/               # AMD GPU
+    │   └── kustomization.yaml
+    └── cpu/                # CPU only
+        └── kustomization.yaml
+```
 
 ## Contributi
 
@@ -374,6 +472,6 @@ Maggiori info: https://creativecommons.org/licenses/by-nc/4.0/
 
 ---
 
-**Versione**: 2.1.0  
+**Versione**: 2.1.1  
 **Ultimo aggiornamento**: 2026-02-05  
 **Autore**: Vincenzo

@@ -1,0 +1,32 @@
+# k8s/ollama/overlays/cpu/kustomization.yaml
+# CPU-only overlay
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+nameSuffix: -cpu
+
+resources:
+  - ../../base
+
+patches:
+  - target:
+      kind: Deployment
+      name: ollama
+    patch: |-
+      - op: add
+        path: /metadata/annotations
+        value:
+          gpu-type: cpu-only
+      - op: replace
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests:
+            memory: "4Gi"
+            cpu: "4000m"
+          limits:
+            memory: "16Gi"
+            cpu: "8000m"
+
+images:
+  - name: ollama/ollama
+    newTag: latest

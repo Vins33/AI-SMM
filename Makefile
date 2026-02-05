@@ -73,6 +73,27 @@ quality: lint format-check test ## Run all quality checks
 # Docker
 # =============================================================================
 
+detect-gpu: ## Detect available GPU (CUDA, ROCm, or CPU)
+	@./scripts/detect-gpu.sh
+
+docker-up: ## Start all services with auto-detected GPU
+	@./scripts/start.sh up -d
+
+docker-up-cuda: ## Start with NVIDIA GPU (CUDA)
+	docker compose --profile cuda up -d
+
+docker-up-rocm: ## Start with AMD GPU (ROCm)
+	docker compose --profile rocm up -d
+
+docker-up-cpu: ## Start with CPU only
+	docker compose --profile cpu up -d
+
+docker-down: ## Stop all services
+	docker compose --profile cuda --profile rocm --profile cpu down
+
+docker-logs: ## Show logs from all services
+	@./scripts/start.sh logs -f
+
 build: ## Build Docker image
 	docker build \
 		--tag $(APP_NAME):$(VERSION) \
@@ -103,6 +124,25 @@ deploy-staging: ## Deploy to staging environment
 
 deploy-prod: ## Deploy to production environment
 	./scripts/deploy.sh deploy prod
+
+# Ollama K8s deployment with GPU auto-detection
+deploy-ollama: ## Deploy Ollama to K8s (auto-detect GPU)
+	@./scripts/deploy-ollama.sh deploy auto
+
+deploy-ollama-cuda: ## Deploy Ollama with NVIDIA GPU
+	@./scripts/deploy-ollama.sh deploy cuda
+
+deploy-ollama-rocm: ## Deploy Ollama with AMD GPU
+	@./scripts/deploy-ollama.sh deploy rocm
+
+deploy-ollama-cpu: ## Deploy Ollama CPU-only
+	@./scripts/deploy-ollama.sh deploy cpu
+
+delete-ollama: ## Delete Ollama from K8s
+	@./scripts/deploy-ollama.sh delete
+
+k8s-detect-gpu: ## Detect GPU type in K8s cluster
+	@./scripts/deploy-ollama.sh detect
 
 k8s-status: ## Show Kubernetes deployment status
 	./scripts/deploy.sh status
