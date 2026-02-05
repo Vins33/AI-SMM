@@ -487,7 +487,7 @@ Al primo avvio viene creato automaticamente un utente sysadmin:
 
 | Campo | Valore |
 |-------|--------|
-| Username | `admin` |
+| Username | `` |
 | Password | `` |
 
 ⚠️ **IMPORTANTE**: Cambia subito la password dell'admin in produzione!
