@@ -1,11 +1,25 @@
 __pycache__/
 *.pyc
-.env
 .pytest_cache/
 venv/
 .venv/
 .idea/
 .vscode/
+
+# Configuration files (sensitive)
+.env
+.env.local
+.env.production
+.env.*.local
+*.pem
+*.key
+secrets.yaml
+secrets.yml
+
+# Prompts configuration (customized)
+src/core/prompts.yaml
+
+# Docker volumes
 *docker_volumes/*
 *ollama_data_host/*
 *qdrant_data/*
@@ -13,3 +27,11 @@ venv/
 *qdrant_data_host/*
 *postgres_data_host/*
 *data/*
+
+# Logs
+*.log
+logs/
+
+# OS files
+.DS_Store
+Thumbs.db
