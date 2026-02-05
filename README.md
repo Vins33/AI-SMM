@@ -16,6 +16,12 @@ Applicazione web per chattare con un agente finanziario AI basato su LangGraph, 
 - 📚 **Knowledge Base vettoriale** (Qdrant) per memoria a lungo termine
 - 💾 **Persistenza conversazioni** (PostgreSQL + LangGraph AsyncPostgresSaver)
 - 🎨 **UI moderna WhatsApp-style** con NiceGUI (dark theme, angoli smussati, responsive)
+- 🔐 **Autenticazione JWT** con ruoli (user, admin, sysadmin)
+- 👑 **Dashboard Admin** per sysadmin con:
+  - Gestione utenti (CRUD completo)
+  - Esplorazione database
+  - Esecuzione query SQL
+  - Statistiche sistema
 - ⚙️ **Prompt configurabili** via YAML
 - 🔧 **LLM configurabile** (context window, temperatura, keep-alive)
 - 🚀 **Production-ready** (Kubernetes, health checks, structured logging)
@@ -31,6 +37,7 @@ Applicazione web per chattare con un agente finanziario AI basato su LangGraph, 
 | **LLM** | Ollama (locale) - modello: gpt-oss:20b |
 | **Agent Framework** | LangGraph + LangChain |
 | **Checkpointing** | LangGraph AsyncPostgresSaver |
+| **Auth** | JWT (python-jose) + bcrypt (passlib) |
 | **Deploy** | Kubernetes (Kustomize) |
 
 ## Requisiti
@@ -217,10 +224,14 @@ classifier/
 │   ├── main.py                 # Entry point FastAPI + NiceGUI
 │   ├── api/
 │   │   ├── __init__.py
-│   │   └── endpoints.py        # REST API endpoints
+│   │   ├── endpoints.py        # REST API endpoints
+│   │   ├── auth.py             # Endpoints autenticazione (login, register)
+│   │   ├── admin.py            # Endpoints admin (CRUD utenti, query DB)
+│   │   └── health.py           # Health checks
 │   ├── core/
 │   │   ├── __init__.py
 │   │   ├── config.py           # Configurazione LLM e app (pydantic-settings)
+│   │   ├── security.py         # JWT e password hashing
 │   │   ├── prompts.py          # Loader prompts da YAML
 │   │   ├── prompts.yaml        # Tutti i prompts configurabili
 │   │   ├── agent_graph.py      # LangGraph agent con checkpointing
@@ -228,6 +239,8 @@ classifier/
 │   ├── services/
 │   │   ├── __init__.py
 │   │   ├── database.py         # SQLAlchemy async + CRUD
+│   │   ├── auth_models.py      # Modelli User e ruoli
+│   │   ├── auth_service.py     # Servizio autenticazione
 │   │   ├── financial.py        # Analisi titoli (yfinance)
 │   │   ├── knowledge.py        # Ricerca web (SerpAPI)
 │   │   ├── llm.py              # Servizio Ollama
@@ -242,7 +255,9 @@ classifier/
 │       │   └── sidebar.py      # ConversationList con rename/delete
 │       └── pages/
 │           ├── __init__.py
-│           └── chat_page.py    # Pagina chat principale
+│           ├── chat_page.py    # Pagina chat principale
+│           ├── login_page.py   # Pagine login e registrazione
+│           └── admin_page.py   # Dashboard amministrazione
 ├── data/                       # Dati esempio
 ├── ollama_setup/               # Setup Ollama Docker
 ├── Dockerfile
@@ -275,6 +290,10 @@ LLM_MODEL_NAME=gpt-oss:20b
 
 # API Keys
 SERPAPI_API_KEY=your_api_key_here
+
+# Autenticazione (opzionale - genera automaticamente se non specificato)
+SECRET_KEY=your-super-secret-key-here
+ACCESS_TOKEN_EXPIRE_MINUTES=30
 ```
 
 ### Configurazione LLM (src/core/config.py)
@@ -449,6 +468,86 @@ k8s/ollama/
 1. Apri una issue descrivendo il miglioramento o bug
 2. Crea una branch per la tua feature
 3. Apri una pull request
+
+## Autenticazione e Admin
+
+### Sistema di autenticazione
+
+L'applicazione include un sistema di autenticazione JWT completo con tre ruoli:
+
+| Ruolo | Descrizione |
+|-------|-------------|
+| `user` | Utente standard, accesso alla chat |
+| `admin` | Amministratore |
+| `sysadmin` | Amministratore di sistema, accesso completo |
+
+### Credenziali default
+
+Al primo avvio viene creato automaticamente un utente sysadmin:
+
+| Campo | Valore |
+|-------|--------|
+| Username | `` |
+| Password | `` |
+
+⚠️ **IMPORTANTE**: Cambia subito la password dell'admin in produzione!
+
+### Pagine disponibili
+
+| URL | Descrizione | Accesso |
+|-----|-------------|---------|
+| `/` | Chat con l'agente | Utenti autenticati |
+| `/login` | Pagina di login | Pubblico |
+| `/register` | Registrazione nuovo utente | Pubblico |
+| `/admin` | Dashboard amministrazione | Solo sysadmin |
+| `/logout` | Logout | Utenti autenticati |
+
+### API Autenticazione
+
+```bash
+# Registrazione
+curl -X POST http://localhost:8000/api/v1/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"username": "newuser", "email": "user@example.com", "password": "password123"}'
+
+# Login
+curl -X POST http://localhost:8000/api/v1/auth/login \
+  -d "username=admin&password=Fin@nci@l_Ag3nt_2026!"
+
+# Risposta: {"access_token": "...", "refresh_token": "...", "token_type": "bearer"}
+
+# Usa il token per richieste autenticate
+curl -X GET http://localhost:8000/api/v1/auth/me \
+  -H "Authorization: Bearer <access_token>"
+```
+
+### API Admin (solo sysadmin)
+
+```bash
+# Lista utenti
+curl -X GET http://localhost:8000/api/v1/admin/users \
+  -H "Authorization: Bearer <token>"
+
+# Crea utente
+curl -X POST http://localhost:8000/api/v1/admin/users \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"username": "newadmin", "email": "admin@example.com", "password": "pass", "role": "admin"}'
+
+# Lista tabelle database
+curl -X GET http://localhost:8000/api/v1/admin/database/tables \
+  -H "Authorization: Bearer <token>"
+
+# Esegui query SQL
+curl -X POST http://localhost:8000/api/v1/admin/database/query \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"query": "SELECT * FROM users LIMIT 10"}'
+
+# Statistiche dashboard
+curl -X GET http://localhost:8000/api/v1/admin/dashboard/stats \
+  -H "Authorization: Bearer <token>"
+```
 
 ## Licenza
 

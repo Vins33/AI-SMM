@@ -5,15 +5,20 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+from nicegui import app as nicegui_app
 from nicegui import ui
 
+from src.api.admin import router as admin_router
+from src.api.auth import router as auth_router
 from src.api.endpoints import router
 from src.api.health import router as health_router
 from src.core.config import settings
 from src.core.exceptions import AppError
 from src.core.logging import get_logger, setup_logging
 from src.services.database import init_db
+from src.ui.pages.admin_page import AdminDashboard
 from src.ui.pages.chat_page import ChatPage
+from src.ui.pages.login_page import LoginPage, RegisterPage
 
 # Setup logging first
 setup_logging(
@@ -26,7 +31,7 @@ logger = get_logger("main")
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(fastapi_application: FastAPI):
     """Application lifespan manager."""
     logger.info(
         "Starting application",
@@ -88,13 +93,15 @@ async def generic_error_handler(request: Request, exc: Exception):
 
 # Include routers
 fastapi_app.include_router(health_router)
+fastapi_app.include_router(auth_router, prefix="/api/v1", tags=["Authentication"])
+fastapi_app.include_router(admin_router, prefix="/api/v1", tags=["Admin"])
 fastapi_app.include_router(router, prefix="/api/v1", tags=["API"])
 
 
 # NiceGUI pages
 @ui.page("/")
 async def index():
-    """Main chat page."""
+    """Main chat page - requires authentication."""
     # Enable dark mode for ChatGPT-like appearance
     ui.dark_mode(True)
     ui.add_head_html(
@@ -108,8 +115,48 @@ async def index():
         </style>
         """
     )
+    
+    # Check if user is authenticated
+    token = nicegui_app.storage.user.get("access_token", "")
+    if not token:
+        ui.navigate.to("/login")
+        return
+    
     chat_page = ChatPage(is_dark=True)
     await chat_page.render()
+
+
+@ui.page("/login")
+async def login_page():
+    """Login page."""
+    # Don't auto-redirect - let user explicitly navigate after login
+    login = LoginPage(is_dark=True)
+    await login.render()
+
+
+@ui.page("/register")
+async def register_page():
+    """Registration page."""
+    # Don't auto-redirect - let user explicitly navigate
+    register = RegisterPage(is_dark=True)
+    await register.render()
+
+
+@ui.page("/admin")
+async def admin_page():
+    """Admin dashboard page."""
+    admin = AdminDashboard(is_dark=True)
+    await admin.render()
+
+
+@ui.page("/logout")
+async def logout_page():
+    """Logout and clear session."""
+    try:
+        nicegui_app.storage.user.clear()
+    except Exception:
+        pass
+    ui.navigate.to("/login")
 
 
 # Initialize NiceGUI with FastAPI

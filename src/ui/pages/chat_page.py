@@ -1,7 +1,7 @@
 # src/ui/pages/chat_page.py
 """Chat page with LangGraph agent integration - ChatGPT-like style."""
 
-from nicegui import ui
+from nicegui import app, ui
 
 from src.core.agent_graph import get_agent_graph_response
 from src.services.database import (
@@ -77,6 +77,18 @@ class ChatPage:
                         "dots", size="md", color="white"
                     ).classes("ml-4")
                     self.loading_spinner.visible = False
+
+                    # Admin button (only for sysadmin)
+                    role = app.storage.user.get("role", "")
+                    if role == "sysadmin":
+                        ui.button(icon="admin_panel_settings", on_click=lambda: ui.navigate.to("/admin")).props(
+                            "flat round"
+                        ).classes("text-white").tooltip("Admin Panel")
+
+                    # Logout button
+                    ui.button(icon="logout", on_click=lambda: ui.navigate.to("/logout")).props(
+                        "flat round"
+                    ).classes("text-white").tooltip("Logout")
 
                 # Chat messages
                 self.chat_container = ChatContainer(is_dark=self.is_dark)

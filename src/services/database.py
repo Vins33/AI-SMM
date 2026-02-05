@@ -32,8 +32,17 @@ async def get_db_session():
 
 async def init_db():
     """Initialize database tables."""
+    # Import auth models to ensure they are registered with Base
+    from src.services.auth_models import User  # noqa: F401
+
     async with async_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
+    # Ensure sysadmin exists
+    from src.services.auth_service import ensure_sysadmin_exists
+
+    async with AsyncSessionLocal() as session:
+        await ensure_sysadmin_exists(session)
 
 
 # --- Conversation CRUD ---
