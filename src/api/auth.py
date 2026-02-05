@@ -78,7 +78,7 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 
 async def get_current_user(
     token: Annotated[str, Depends(oauth2_scheme)],
-    session: AsyncSession = Depends(get_db),
+    session: Annotated[AsyncSession, Depends(get_db)],
 ) -> User:
     """Get the current authenticated user from JWT token."""
     credentials_exception = HTTPException(
@@ -136,7 +136,10 @@ async def get_current_sysadmin_user(
 
 
 @router.post("/register", response_model=UserResponse)
-async def register(user_data: UserCreate, session: AsyncSession = Depends(get_db)):
+async def register(
+    user_data: UserCreate,
+    session: Annotated[AsyncSession, Depends(get_db)],
+):
     """Register a new user."""
     # Check if username exists
     existing_user = await get_user_by_username(session, user_data.username)
@@ -167,7 +170,7 @@ async def register(user_data: UserCreate, session: AsyncSession = Depends(get_db
 @router.post("/login", response_model=Token)
 async def login(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
-    session: AsyncSession = Depends(get_db),
+    session: Annotated[AsyncSession, Depends(get_db)],
 ):
     """Login and get access token."""
     user = await authenticate_user(session, form_data.username, form_data.password)
@@ -198,7 +201,8 @@ async def login(
 
 @router.post("/refresh", response_model=Token)
 async def refresh_token(
-    token_data: TokenRefresh, session: AsyncSession = Depends(get_db)
+    token_data: TokenRefresh,
+    session: Annotated[AsyncSession, Depends(get_db)],
 ):
     """Refresh access token using refresh token."""
     payload = decode_access_token(token_data.refresh_token)

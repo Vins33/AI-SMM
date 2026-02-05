@@ -100,7 +100,7 @@ class DashboardStats(BaseModel):
 @router.get("/users", response_model=list[UserResponseAdmin])
 async def list_users(
     _: Annotated[User, Depends(get_current_sysadmin_user)],
-    session: AsyncSession = Depends(get_db),
+    session: Annotated[AsyncSession, Depends(get_db)],
 ):
     """Get all users (sysadmin only)."""
     users = await get_all_users(session)
@@ -123,7 +123,7 @@ async def list_users(
 async def get_user(
     user_id: int,
     _: Annotated[User, Depends(get_current_sysadmin_user)],
-    session: AsyncSession = Depends(get_db),
+    session: Annotated[AsyncSession, Depends(get_db)],
 ):
     """Get a specific user by ID (sysadmin only)."""
     user = await get_user_by_id(session, user_id)
@@ -148,7 +148,7 @@ async def get_user(
 async def create_user_admin(
     user_data: UserCreateAdmin,
     _: Annotated[User, Depends(get_current_sysadmin_user)],
-    session: AsyncSession = Depends(get_db),
+    session: Annotated[AsyncSession, Depends(get_db)],
 ):
     """Create a new user (sysadmin only)."""
     # Check if username exists
@@ -174,7 +174,7 @@ async def create_user_admin(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Invalid role. Must be one of: {[r.value for r in UserRole]}",
-        )
+        ) from None
 
     user = await create_user(
         session,
@@ -201,7 +201,7 @@ async def update_user_admin(
     user_id: int,
     user_data: UserUpdateAdmin,
     current_user: Annotated[User, Depends(get_current_sysadmin_user)],
-    session: AsyncSession = Depends(get_db),
+    session: Annotated[AsyncSession, Depends(get_db)],
 ):
     """Update a user (sysadmin only)."""
     # Prevent self-demotion
@@ -220,7 +220,7 @@ async def update_user_admin(
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Invalid role. Must be one of: {[r.value for r in UserRole]}",
-            )
+            ) from None
 
     user = await update_user(
         session,
@@ -254,7 +254,7 @@ async def update_user_admin(
 async def delete_user_admin(
     user_id: int,
     current_user: Annotated[User, Depends(get_current_sysadmin_user)],
-    session: AsyncSession = Depends(get_db),
+    session: Annotated[AsyncSession, Depends(get_db)],
 ):
     """Delete a user (sysadmin only)."""
     # Prevent self-deletion
@@ -278,7 +278,7 @@ async def delete_user_admin(
 @router.get("/database/tables", response_model=list[TableInfo])
 async def list_tables(
     _: Annotated[User, Depends(get_current_sysadmin_user)],
-    session: AsyncSession = Depends(get_db),
+    session: Annotated[AsyncSession, Depends(get_db)],
 ):
     """Get list of all database tables with their columns (sysadmin only)."""
     tables = []
@@ -302,20 +302,13 @@ async def list_tables(
             ),
             {"table_name": table_name},
         )
-        columns = [
-            {"name": row[0], "type": row[1], "nullable": row[2] == "YES"}
-            for row in col_result.fetchall()
-        ]
+        columns = [{"name": row[0], "type": row[1], "nullable": row[2] == "YES"} for row in col_result.fetchall()]
 
         # Get row count
-        count_result = await session.execute(
-            text(f'SELECT COUNT(*) FROM "{table_name}"')
-        )
+        count_result = await session.execute(text(f'SELECT COUNT(*) FROM "{table_name}"'))
         row_count = count_result.scalar() or 0
 
-        tables.append(
-            TableInfo(name=table_name, columns=columns, row_count=row_count)
-        )
+        tables.append(TableInfo(name=table_name, columns=columns, row_count=row_count))
 
     return tables
 
@@ -324,7 +317,7 @@ async def list_tables(
 async def get_table_data(
     table_name: str,
     _: Annotated[User, Depends(get_current_sysadmin_user)],
-    session: AsyncSession = Depends(get_db),
+    session: Annotated[AsyncSession, Depends(get_db)],
     limit: int = Query(default=100, le=1000),
     offset: int = Query(default=0, ge=0),
 ):
@@ -355,7 +348,7 @@ async def get_table_data(
     return {
         "table": table_name,
         "columns": list(columns),
-        "data": [dict(zip(columns, row)) for row in rows],
+        "data": [dict(zip(columns, row, strict=True)) for row in rows],
         "limit": limit,
         "offset": offset,
     }
@@ -365,7 +358,7 @@ async def get_table_data(
 async def execute_query(
     query_request: QueryRequest,
     _: Annotated[User, Depends(get_current_sysadmin_user)],
-    session: AsyncSession = Depends(get_db),
+    session: Annotated[AsyncSession, Depends(get_db)],
 ):
     """Execute a raw SQL query (sysadmin only). Use with caution!"""
     query = query_request.query.strip()
@@ -386,7 +379,7 @@ async def execute_query(
         if query.upper().startswith("SELECT"):
             rows = result.fetchall()
             columns = result.keys()
-            data = [dict(zip(columns, row)) for row in rows]
+            data = [dict(zip(columns, row, strict=True)) for row in rows]
             return QueryResponse(success=True, data=data)
         else:
             # For INSERT, UPDATE, DELETE
@@ -404,7 +397,7 @@ async def execute_query(
 @router.get("/dashboard/stats", response_model=DashboardStats)
 async def get_dashboard_stats(
     _: Annotated[User, Depends(get_current_sysadmin_user)],
-    session: AsyncSession = Depends(get_db),
+    session: Annotated[AsyncSession, Depends(get_db)],
 ):
     """Get dashboard statistics (sysadmin only)."""
     # Total users
@@ -412,15 +405,11 @@ async def get_dashboard_stats(
     total_users = total_users_result.scalar() or 0
 
     # Active users
-    active_users_result = await session.execute(
-        text("SELECT COUNT(*) FROM users WHERE is_active = true")
-    )
+    active_users_result = await session.execute(text("SELECT COUNT(*) FROM users WHERE is_active = true"))
     active_users = active_users_result.scalar() or 0
 
     # Users by role
-    roles_result = await session.execute(
-        text("SELECT role, COUNT(*) FROM users GROUP BY role")
-    )
+    roles_result = await session.execute(text("SELECT role, COUNT(*) FROM users GROUP BY role"))
     users_by_role = {row[0]: row[1] for row in roles_result.fetchall()}
 
     # Total conversations (if table exists)

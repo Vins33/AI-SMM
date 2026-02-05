@@ -38,37 +38,28 @@ class AdminDashboard:
         # Check if user is sysadmin
         token = app.storage.user.get("access_token", "")
         role = app.storage.user.get("role", "")
-        
+
         # If no token, redirect to login
         if not token:
             with ui.column().classes("w-full h-screen items-center justify-center"):
                 ui.icon("login").classes("text-6xl text-teal-500 mb-4")
                 ui.label("Sessione scaduta").classes("text-2xl text-white font-bold")
-                ui.label("Effettua il login per accedere all'admin panel.").classes(
-                    "text-gray-400 mt-2"
-                )
-                ui.button("Vai al Login", on_click=lambda: ui.navigate.to("/login")).classes(
-                    "mt-4 bg-teal-600"
-                )
+                ui.label("Effettua il login per accedere all'admin panel.").classes("text-gray-400 mt-2")
+                ui.button("Vai al Login", on_click=lambda: ui.navigate.to("/login")).classes("mt-4 bg-teal-600")
             return
-        
+
         if role != "sysadmin":
             with ui.column().classes("w-full h-screen items-center justify-center"):
                 ui.icon("lock").classes("text-6xl text-red-500 mb-4")
                 ui.label("Accesso negato").classes("text-2xl text-white font-bold")
-                ui.label("Questa pagina è riservata agli amministratori di sistema.").classes(
-                    "text-gray-400 mt-2"
-                )
-                ui.button("Torna alla Home", on_click=lambda: ui.navigate.to("/")).classes(
-                    "mt-4 bg-teal-600"
-                )
+                ui.label("Questa pagina è riservata agli amministratori di sistema.").classes("text-gray-400 mt-2")
+                ui.button("Torna alla Home", on_click=lambda: ui.navigate.to("/")).classes("mt-4 bg-teal-600")
             return
 
         # Header
         with ui.row().classes("w-full px-6 py-4 bg-[#202c33] items-center"):
             with ui.element("div").classes(
-                "w-10 h-10 rounded-full bg-gradient-to-br from-red-400 to-orange-600 "
-                "flex items-center justify-center"
+                "w-10 h-10 rounded-full bg-gradient-to-br from-red-400 to-orange-600 flex items-center justify-center"
             ):
                 ui.icon("admin_panel_settings").classes("text-white")
 
@@ -80,12 +71,8 @@ class AdminDashboard:
             username = app.storage.user.get("username", "Admin")
             ui.label(f"👤 {username}").classes("text-gray-300 mr-4")
 
-            ui.button("Logout", on_click=self._logout).classes(
-                "bg-red-600 hover:bg-red-700"
-            )
-            ui.button("Chat", on_click=lambda: ui.navigate.to("/")).classes(
-                "bg-teal-600 hover:bg-teal-700 ml-2"
-            )
+            ui.button("Logout", on_click=self._logout).classes("bg-red-600 hover:bg-red-700")
+            ui.button("Chat", on_click=lambda: ui.navigate.to("/")).classes("bg-teal-600 hover:bg-teal-700 ml-2")
 
         # Main content with tabs
         with ui.tabs().classes("w-full bg-[#1a2730]") as tabs:
@@ -155,9 +142,7 @@ class AdminDashboard:
                         )
 
                     # Users by role
-                    ui.label("Utenti per Ruolo").classes(
-                        "text-xl font-bold text-white mt-8 mb-4"
-                    )
+                    ui.label("Utenti per Ruolo").classes("text-xl font-bold text-white mt-8 mb-4")
                     with ui.row().classes("gap-4"):
                         for role, count in self.stats.get("users_by_role", {}).items():
                             with ui.card().classes("bg-[#202c33] p-4"):
@@ -165,18 +150,14 @@ class AdminDashboard:
                                 ui.label(str(count)).classes("text-2xl font-bold text-white")
 
                 else:
-                    ui.label("Errore nel caricamento delle statistiche").classes(
-                        "text-red-400"
-                    )
+                    ui.label("Errore nel caricamento delle statistiche").classes("text-red-400")
 
         except Exception as e:
             ui.label(f"Errore: {str(e)}").classes("text-red-400")
 
     def _stat_card(self, title: str, value: int, icon: str, gradient: str):
         """Create a statistics card."""
-        with ui.card().classes(
-            f"w-48 p-4 bg-gradient-to-br {gradient} rounded-xl shadow-lg"
-        ):
+        with ui.card().classes(f"w-48 p-4 bg-gradient-to-br {gradient} rounded-xl shadow-lg"):
             with ui.row().classes("items-center justify-between"):
                 ui.icon(icon).classes("text-3xl text-white opacity-80")
                 ui.label(str(value)).classes("text-3xl font-bold text-white")
@@ -184,14 +165,11 @@ class AdminDashboard:
 
     async def _render_users_panel(self):
         """Render users management panel."""
-        import httpx
 
         ui.label("Gestione Utenti").classes("text-2xl font-bold text-white mb-6")
 
         # Add user button
-        ui.button("+ Nuovo Utente", on_click=self._show_add_user_dialog).classes(
-            "bg-teal-600 hover:bg-teal-700 mb-4"
-        )
+        ui.button("+ Nuovo Utente", on_click=self._show_add_user_dialog).classes("bg-teal-600 hover:bg-teal-700 mb-4")
 
         # Users table container
         self.users_table_container = ui.column().classes("w-full")
@@ -235,17 +213,21 @@ class AdminDashboard:
                             for u in users
                         ]
 
-                        table = ui.table(columns=columns, rows=rows, row_key="id").classes(
-                            "w-full bg-[#202c33]"
-                        ).props("dark flat")
+                        table = (
+                            ui.table(columns=columns, rows=rows, row_key="id")
+                            .classes("w-full bg-[#202c33]")
+                            .props("dark flat")
+                        )
 
                         # Add action buttons using slots
                         table.add_slot(
                             "body-cell-actions",
                             """
                             <q-td :props="props">
-                                <q-btn flat round dense icon="edit" color="blue" @click="$parent.$emit('edit', props.row)" />
-                                <q-btn flat round dense icon="delete" color="red" @click="$parent.$emit('delete', props.row)" />
+                                <q-btn flat round dense icon="edit" color="blue"
+                                       @click="$parent.$emit('edit', props.row)" />
+                                <q-btn flat round dense icon="delete" color="red"
+                                       @click="$parent.$emit('delete', props.row)" />
                             </q-td>
                             """,
                         )
@@ -267,11 +249,15 @@ class AdminDashboard:
             username = ui.input("Username").classes("w-full mb-2").props("dark outlined")
             email = ui.input("Email").classes("w-full mb-2").props("dark outlined")
             password = ui.input("Password", password=True).classes("w-full mb-2").props("dark outlined")
-            role = ui.select(
-                ["user", "admin", "sysadmin"],
-                value="user",
-                label="Ruolo",
-            ).classes("w-full mb-4").props("dark outlined")
+            role = (
+                ui.select(
+                    ["user", "admin", "sysadmin"],
+                    value="user",
+                    label="Ruolo",
+                )
+                .classes("w-full mb-4")
+                .props("dark outlined")
+            )
 
             error_label = ui.label("").classes("text-red-400 text-sm")
             error_label.visible = False
@@ -333,12 +319,20 @@ class AdminDashboard:
 
             username = ui.input("Username", value=user["username"]).classes("w-full mb-2").props("dark outlined")
             email = ui.input("Email", value=user["email"]).classes("w-full mb-2").props("dark outlined")
-            password = ui.input("Nuova Password (lascia vuoto per non cambiare)", password=True).classes("w-full mb-2").props("dark outlined")
-            role = ui.select(
-                ["user", "admin", "sysadmin"],
-                value=user["role"],
-                label="Ruolo",
-            ).classes("w-full mb-2").props("dark outlined")
+            password = (
+                ui.input("Nuova Password (lascia vuoto per non cambiare)", password=True)
+                .classes("w-full mb-2")
+                .props("dark outlined")
+            )
+            role = (
+                ui.select(
+                    ["user", "admin", "sysadmin"],
+                    value=user["role"],
+                    label="Ruolo",
+                )
+                .classes("w-full mb-2")
+                .props("dark outlined")
+            )
             is_active = ui.checkbox("Attivo", value=user["is_active"] == "✅").classes("text-white mb-4")
 
             error_label = ui.label("").classes("text-red-400 text-sm")
@@ -388,9 +382,7 @@ class AdminDashboard:
         """Show confirmation dialog before deleting a user."""
         with ui.dialog() as dialog, ui.card().classes("p-6 bg-[#202c33]"):
             ui.label("Conferma Eliminazione").classes("text-xl font-bold text-white mb-4")
-            ui.label(f"Sei sicuro di voler eliminare l'utente '{user['username']}'?").classes(
-                "text-gray-300 mb-4"
-            )
+            ui.label(f"Sei sicuro di voler eliminare l'utente '{user['username']}'?").classes("text-gray-300 mb-4")
 
             with ui.row().classes("w-full justify-end gap-2"):
                 ui.button("Annulla", on_click=dialog.close).classes("bg-gray-600")
@@ -442,22 +434,20 @@ class AdminDashboard:
                             ui.label("Tabelle").classes("text-lg font-bold text-white mb-4")
 
                             for table in tables:
-                                with ui.card().classes(
-                                    "w-full p-4 bg-[#202c33] cursor-pointer hover:bg-[#2a3942] mb-2"
-                                ).on("click", lambda t=table: self._show_table_data(t["name"])):
+                                with (
+                                    ui.card()
+                                    .classes("w-full p-4 bg-[#202c33] cursor-pointer hover:bg-[#2a3942] mb-2")
+                                    .on("click", lambda t=table: self._show_table_data(t["name"]))
+                                ):
                                     with ui.row().classes("items-center justify-between"):
                                         ui.icon("table_chart").classes("text-teal-400")
                                         ui.label(table["name"]).classes("text-white font-medium")
-                                    ui.label(f"{table['row_count']} righe").classes(
-                                        "text-gray-400 text-sm"
-                                    )
+                                    ui.label(f"{table['row_count']} righe").classes("text-gray-400 text-sm")
 
                         # Table data container
                         self.table_data_container = ui.column().classes("flex-grow")
                         with self.table_data_container:
-                            ui.label("Seleziona una tabella per visualizzare i dati").classes(
-                                "text-gray-400"
-                            )
+                            ui.label("Seleziona una tabella per visualizzare i dati").classes("text-gray-400")
 
                 else:
                     ui.label("Errore nel caricamento delle tabelle").classes("text-red-400")
@@ -489,8 +479,7 @@ class AdminDashboard:
 
                         if data:
                             table_columns = [
-                                {"name": col, "label": col, "field": col, "align": "left"}
-                                for col in columns
+                                {"name": col, "label": col, "field": col, "align": "left"} for col in columns
                             ]
 
                             # Convert data for display
@@ -504,9 +493,9 @@ class AdminDashboard:
                                         display_row[key] = str(value) if value is not None else "NULL"
                                 rows.append(display_row)
 
-                            ui.table(columns=table_columns, rows=rows).classes(
-                                "w-full bg-[#202c33]"
-                            ).props("dark flat dense")
+                            ui.table(columns=table_columns, rows=rows).classes("w-full bg-[#202c33]").props(
+                                "dark flat dense"
+                            )
                         else:
                             ui.label("Nessun dato nella tabella").classes("text-gray-400")
 
@@ -523,14 +512,16 @@ class AdminDashboard:
             "text-orange-400 text-sm mb-6"
         )
 
-        self.query_input = ui.textarea(
-            label="Query SQL",
-            placeholder="SELECT * FROM users LIMIT 10;",
-        ).classes("w-full mb-4").props("dark outlined rows=6")
-
-        ui.button("Esegui Query", on_click=self._execute_query).classes(
-            "bg-teal-600 hover:bg-teal-700 mb-4"
+        self.query_input = (
+            ui.textarea(
+                label="Query SQL",
+                placeholder="SELECT * FROM users LIMIT 10;",
+            )
+            .classes("w-full mb-4")
+            .props("dark outlined rows=6")
         )
+
+        ui.button("Esegui Query", on_click=self._execute_query).classes("bg-teal-600 hover:bg-teal-700 mb-4")
 
         self.query_result_container = ui.column().classes("w-full")
 
@@ -562,8 +553,7 @@ class AdminDashboard:
                             if data:
                                 columns = list(data[0].keys())
                                 table_columns = [
-                                    {"name": col, "label": col, "field": col, "align": "left"}
-                                    for col in columns
+                                    {"name": col, "label": col, "field": col, "align": "left"} for col in columns
                                 ]
 
                                 rows = []
@@ -573,16 +563,12 @@ class AdminDashboard:
                                         display_row[key] = str(value) if value is not None else "NULL"
                                     rows.append(display_row)
 
-                                ui.label(f"Risultato: {len(data)} righe").classes(
-                                    "text-green-400 mb-2"
+                                ui.label(f"Risultato: {len(data)} righe").classes("text-green-400 mb-2")
+                                ui.table(columns=table_columns, rows=rows).classes("w-full bg-[#202c33]").props(
+                                    "dark flat dense"
                                 )
-                                ui.table(columns=table_columns, rows=rows).classes(
-                                    "w-full bg-[#202c33]"
-                                ).props("dark flat dense")
                             else:
-                                ui.label("Query eseguita, nessun risultato").classes(
-                                    "text-green-400"
-                                )
+                                ui.label("Query eseguita, nessun risultato").classes("text-green-400")
                         else:
                             ui.label(
                                 f"Query eseguita con successo. Righe modificate: {result.get('affected_rows', 0)}"
