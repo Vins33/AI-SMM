@@ -1,0 +1,47 @@
+# k8s/ollama/overlays/rocm/kustomization.yaml
+# AMD GPU (ROCm) overlay
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+nameSuffix: -rocm
+
+resources:
+  - ../../base
+
+patches:
+  - target:
+      kind: Deployment
+      name: ollama
+    patch: |-
+      - op: add
+        path: /metadata/annotations
+        value:
+          gpu-type: amd-rocm
+      - op: replace
+        path: /spec/template/spec/containers/0/image
+        value: ollama/ollama:rocm
+      - op: replace
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests:
+            memory: "8Gi"
+            cpu: "2000m"
+            amd.com/gpu: "1"
+          limits:
+            memory: "32Gi"
+            cpu: "8000m"
+            amd.com/gpu: "1"
+      - op: add
+        path: /spec/template/spec/tolerations
+        value:
+          - key: amd.com/gpu
+            operator: Exists
+            effect: NoSchedule
+      - op: add
+        path: /spec/template/spec/nodeSelector
+        value:
+          accelerator: amd
+
+images:
+  - name: ollama/ollama
+    newTag: rocm

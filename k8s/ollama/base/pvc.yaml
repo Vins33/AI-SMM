@@ -1,0 +1,14 @@
+# k8s/ollama/base/pvc.yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ollama-pvc
+  labels:
+    app.kubernetes.io/name: ollama
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 50Gi
+  # storageClassName: standard  # Uncomment and adjust for your cluster
