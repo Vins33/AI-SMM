@@ -1,3 +1,5 @@
+import secrets
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -12,6 +14,11 @@ class Settings(BaseSettings):
     # Logging (K8s ready)
     LOG_LEVEL: str = "INFO"
     LOG_JSON_FORMAT: bool = True  # True for K8s, False for local dev
+
+    # Authentication
+    SECRET_KEY: str = secrets.token_urlsafe(32)
+    ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
 
     # Database
     DATABASE_URL: str

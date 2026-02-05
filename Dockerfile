@@ -60,6 +60,9 @@ ENV PYTHONUNBUFFERED=1 \
 # Create non-root user for security
 RUN groupadd -r appgroup && useradd -r -g appgroup appuser
 
+# Create NiceGUI storage directory with correct permissions
+RUN mkdir -p /app/.nicegui && chown -R appuser:appgroup /app/.nicegui
+
 # Copy application code
 COPY --chown=appuser:appgroup . /app
 
