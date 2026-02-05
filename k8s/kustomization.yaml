@@ -1,0 +1,32 @@
+# k8s/kustomization.yaml
+# Base kustomization file
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: financial-agent
+
+labels:
+  - includeSelectors: false
+    pairs:
+      app.kubernetes.io/managed-by: kustomize
+      app.kubernetes.io/part-of: financial-agent-system
+
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - secret.yaml
+  - serviceaccount.yaml
+  - deployment.yaml
+  - service.yaml
+  - ingress.yaml
+  - hpa.yaml
+  - pdb.yaml
+  - networkpolicy.yaml
+
+# Common labels applied to all resources
+commonLabels:
+  app.kubernetes.io/name: financial-agent
+
+images:
+  - name: financial-agent
+    newTag: "2.1.0"

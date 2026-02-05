@@ -1,0 +1,16 @@
+# k8s/pdb.yaml
+# Pod Disruption Budget - ensures high availability during updates
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: financial-agent-pdb
+  namespace: financial-agent
+  labels:
+    app.kubernetes.io/name: financial-agent
+    app.kubernetes.io/component: pdb
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: financial-agent
+      app.kubernetes.io/component: api

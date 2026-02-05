@@ -4,9 +4,20 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
+    # App metadata
+    APP_NAME: str = "financial-agent"
+    APP_VERSION: str = "2.1.0"
+    ENVIRONMENT: str = "development"  # development, staging, production
+
+    # Logging (K8s ready)
+    LOG_LEVEL: str = "INFO"
+    LOG_JSON_FORMAT: bool = True  # True for K8s, False for local dev
+
     # Database
     DATABASE_URL: str
     CHECKPOINT_PG_DSN: str = ""
+    DB_POOL_SIZE: int = 5
+    DB_MAX_OVERFLOW: int = 10
 
     # Ollama LLM
     OLLAMA_BASE_URL: str
@@ -15,14 +26,27 @@ class Settings(BaseSettings):
     LLM_KEEP_ALIVE: str = "4h"
     LLM_SEED: int = 42
     LLM_NUM_CTX: int = 16384  # Context window per la memoria conversazione
+    LLM_TIMEOUT: int = 120  # Timeout in seconds
 
     # Qdrant Vector Store
     QDRANT_HOST: str
     QDRANT_PORT: int = 6333
     EMBEDDING_MODEL_NAME: str = "nomic-embed-text"
+    QDRANT_TIMEOUT: int = 30
 
     # API Keys
     SERPAPI_API_KEY: str
+
+    # Kubernetes / Health checks
+    HEALTH_CHECK_TIMEOUT: int = 5
+
+    @property
+    def is_production(self) -> bool:
+        return self.ENVIRONMENT == "production"
+
+    @property
+    def is_development(self) -> bool:
+        return self.ENVIRONMENT == "development"
 
 
 settings = Settings()

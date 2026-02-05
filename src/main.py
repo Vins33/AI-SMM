@@ -3,40 +3,92 @@
 
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from nicegui import ui
 
 from src.api.endpoints import router
-from src.services.database import async_engine, init_db
-from src.services.models import Base
+from src.api.health import router as health_router
+from src.core.config import settings
+from src.core.exceptions import AppError
+from src.core.logging import get_logger, setup_logging
+from src.services.database import init_db
 from src.ui.pages.chat_page import ChatPage
+
+# Setup logging first
+setup_logging(
+    level=settings.LOG_LEVEL,
+    json_format=settings.LOG_JSON_FORMAT,
+    app_name=settings.APP_NAME,
+)
+
+logger = get_logger("main")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager."""
-    print("Starting application...")
+    logger.info(
+        "Starting application",
+        extra={
+            "version": settings.APP_VERSION,
+            "environment": settings.ENVIRONMENT,
+        },
+    )
     await init_db()
-    print("Database initialized.")
+    logger.info("Database initialized")
     yield
-    print("Shutting down...")
+    logger.info("Shutting down application")
 
 
 # Create FastAPI app
 fastapi_app = FastAPI(
     title="Financial Agent API",
     description="API for financial agent with LangGraph.",
-    version="2.0.0",
+    version=settings.APP_VERSION,
     lifespan=lifespan,
+    docs_url="/docs" if settings.is_development else None,
+    redoc_url="/redoc" if settings.is_development else None,
 )
 
-fastapi_app.include_router(router, prefix="/api", tags=["API"])
+
+# Global exception handler
+@fastapi_app.exception_handler(AppError)
+async def app_error_handler(request: Request, exc: AppError):
+    """Handle custom application errors."""
+    logger.error(
+        exc.message,
+        extra={
+            "code": exc.code,
+            "status_code": exc.status_code,
+            "details": exc.details,
+            "path": request.url.path,
+        },
+    )
+    return JSONResponse(status_code=exc.status_code, content=exc.to_dict())
 
 
-@fastapi_app.get("/health")
-async def health_check():
-    """Health check endpoint."""
-    return {"status": "ok"}
+@fastapi_app.exception_handler(Exception)
+async def generic_error_handler(request: Request, exc: Exception):
+    """Handle unexpected errors."""
+    logger.exception(
+        "Unhandled exception",
+        extra={"path": request.url.path, "error": str(exc)},
+    )
+    return JSONResponse(
+        status_code=500,
+        content={
+            "error": {
+                "code": "INTERNAL_ERROR",
+                "message": "An unexpected error occurred",
+            }
+        },
+    )
+
+
+# Include routers
+fastapi_app.include_router(health_router)
+fastapi_app.include_router(router, prefix="/api/v1", tags=["API"])
 
 
 # NiceGUI pages
@@ -66,3 +118,6 @@ ui.run_with(
     title="Agente Finanziario",
     storage_secret="financial-agent-secret",
 )
+
+# Alias for uvicorn compatibility (uvicorn src.main:app)
+app = fastapi_app

@@ -1,37 +1,73 @@
 [project]
-name = "classifier"
-version = "0.1.0"
-description = "Add your description here"
+name = "financial-agent"
+version = "2.1.0"
+description = "AI-powered Financial Agent with LangGraph, NiceGUI and RAG capabilities"
 readme = "README.md"
 requires-python = ">=3.12"
+keywords = ["ai", "langchain", "langgraph", "financial", "agent", "rag", "nicegui"]
+authors = [
+    { name = "Your Name", email = "your.email@example.com" }
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Financial and Insurance Industry",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
 dependencies = [
-    "asyncpg>=0.30.0",
-    "dependencies>=7.7.1",
+    # Web Framework & UI
+    "nicegui>=3.6.0",
     "fastapi>=0.116.1",
-    "google-api-python-client>=2.181.0",
-    "google-search-results>=2.4.2",
-    "httpx>=0.28.1",
+    "uvicorn[standard]>=0.35.0",
+    "python-multipart>=0.0.20",
+    
+    # Database & Storage
+    "asyncpg>=0.30.0",
+    "sqlalchemy[asyncio]>=2.0.43",
+    "qdrant-client>=1.15.1",
+    
+    # AI/ML Stack
     "langchain>=0.3.27",
     "langchain-community>=0.3.29",
     "langchain-core>=0.3.76",
     "langchain-ollama>=0.3.8",
     "langgraph>=0.6.7",
-    "nest-asyncio>=1.6.0",
+    "langgraph-checkpoint-postgres>=2.0.0",
+    "psycopg[binary]>=3.1.0",
+    
+    # Data & APIs
     "pandas>=2.3.2",
-    "pydantic-settings>=2.10.1",
-    "python-multipart>=0.0.20",
-    "qdrant-client>=1.15.1",
-    "sqlalchemy>=2.0.43",
-    "streamlit>=1.49.1",
-    "typing-inspect>=0.9.0",
-    "uvicorn>=0.35.0",
     "yfinance>=1.0",
+    "google-search-results>=2.4.2",
+    "httpx>=0.28.1",
+    
+    # Configuration & Utilities
+    "pydantic-settings>=2.10.1",
+    "pyyaml>=6.0",
+    "typing-inspect>=0.9.0",
 ]
 
-[dependency-groups]
+[project.optional-dependencies]
 dev = [
     "ruff>=0.12.12",
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.24.0",
+    "pytest-cov>=6.0.0",
+    "httpx>=0.28.1",  # For TestClient
+    "respx>=0.22.0",  # Mock HTTP
 ]
+
+[project.urls]
+Homepage = "https://github.com/yourname/financial-agent"
+Documentation = "https://github.com/yourname/financial-agent#readme"
+Repository = "https://github.com/yourname/financial-agent"
+Issues = "https://github.com/yourname/financial-agent/issues"
+
+[project.scripts]
+financial-agent = "src.main:main"
 
 [tool.ruff]
 # Imposta la lunghezza massima della linea

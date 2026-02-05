@@ -1,30 +1,24 @@
-# Agente Finanziario - Chat
+# Financial Agent - AI Chat
 
 Applicazione web per chattare con un agente finanziario AI basato su LangGraph, con supporto per analisi di titoli, ricerca web e knowledge base vettoriale.
 
 ![Python 3.12+](https://img.shields.io/badge/Python-3.12+-3776AB?style=flat-square&logo=python)
 ![NiceGUI](https://img.shields.io/badge/Framework-NiceGUI-00A0E4?style=flat-square)
 ![LangGraph](https://img.shields.io/badge/Agent-LangGraph-FF6B6B?style=flat-square)
+![Kubernetes](https://img.shields.io/badge/Deploy-Kubernetes-326CE5?style=flat-square&logo=kubernetes)
 
 ## Funzionalità principali
 
 - 💬 **Chat con agente finanziario AI** (LangGraph + Ollama) con checkpointing PostgreSQL
 - 📊 **Analisi fondamentale titoli** (P/E, ROE, D/E, Beta, Dividend Yield, EV/EBITDA)
+- 📈 **11 Tool finanziari** (YFinance: prezzi, dividendi, news, indicatori tecnici, earnings)
 - 🔍 **Ricerca web integrata** (SerpAPI/Google)
 - 📚 **Knowledge Base vettoriale** (Qdrant) per memoria a lungo termine
 - 💾 **Persistenza conversazioni** (PostgreSQL + LangGraph AsyncPostgresSaver)
 - 🎨 **UI moderna WhatsApp-style** con NiceGUI (dark theme, angoli smussati, responsive)
 - ⚙️ **Prompt configurabili** via YAML
 - 🔧 **LLM configurabile** (context window, temperatura, keep-alive)
-
-## Screenshot
-
-L'interfaccia è ispirata a WhatsApp con:
-- Sidebar con lista conversazioni e ricerca
-- Header con avatar e stato online
-- Bolle messaggi arrotondate con colori distinti
-- Input floating centrato
-- Tabelle markdown con angoli smussati
+- 🚀 **Production-ready** (Kubernetes, health checks, structured logging)
 
 ## Stack tecnologico
 
@@ -37,6 +31,7 @@ L'interfaccia è ispirata a WhatsApp con:
 | **LLM** | Ollama (locale) - modello: gpt-oss:20b |
 | **Agent Framework** | LangGraph + LangChain |
 | **Checkpointing** | LangGraph AsyncPostgresSaver |
+| **Deploy** | Kubernetes (Kustomize) |
 
 ## Requisiti
 
@@ -46,7 +41,7 @@ L'interfaccia è ispirata a WhatsApp con:
 
 ## Installazione
 
-### Con Docker Compose (consigliato)
+### Con Docker Compose (consigliato per sviluppo)
 
 ```bash
 # Clona il repository
@@ -54,7 +49,7 @@ git clone <repo-url>
 cd classifier
 
 # Crea il file .env
-cp .env.exemple .env
+cp .env.example .env
 # Modifica .env con le tue configurazioni
 
 # Avvia tutti i servizi
@@ -66,15 +61,43 @@ L'applicazione sarà disponibile su `http://localhost:8000`
 ### Sviluppo locale
 
 ```bash
-# Crea ambiente virtuale con uv
-uv venv
-source .venv/bin/activate
-
-# Installa dipendenze
-uv pip install -r requirements.txt
+# Installa dipendenze con uv
+uv sync --dev
 
 # Avvia l'applicazione
-python -m uvicorn src.main:fastapi_app --host 0.0.0.0 --port 8000 --reload
+make run-reload
+```
+
+### Deploy su Kubernetes
+
+```bash
+# Build e push dell'immagine
+make build
+make push
+
+# Deploy (scegli ambiente)
+make deploy-dev      # Development
+make deploy-staging  # Staging
+make deploy-prod     # Production
+
+# Verifica status
+make k8s-status
+```
+
+## Comandi disponibili
+
+```bash
+make help           # Mostra tutti i comandi disponibili
+make install        # Installa dipendenze production
+make dev            # Installa dipendenze dev
+make test           # Esegui test
+make test-cov       # Test con coverage
+make lint           # Linting
+make format         # Formatta codice
+make quality        # Tutti i quality check
+make build          # Build Docker image
+make deploy-dev     # Deploy su K8s dev
+make deploy-prod    # Deploy su K8s prod
 ```
 
 ## Struttura del progetto

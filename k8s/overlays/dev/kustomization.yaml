@@ -1,0 +1,32 @@
+# k8s/overlays/dev/kustomization.yaml
+# Development overlay
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: financial-agent-dev
+
+namePrefix: dev-
+
+resources:
+  - ../../
+
+patches:
+  - patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+    target:
+      kind: Deployment
+      name: financial-agent
+
+configMapGenerator:
+  - name: financial-agent-config
+    behavior: merge
+    literals:
+      - ENVIRONMENT=development
+      - LOG_LEVEL=DEBUG
+      - LOG_JSON_FORMAT=false
+
+images:
+  - name: financial-agent
+    newTag: "latest"
