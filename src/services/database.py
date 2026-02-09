@@ -5,6 +5,7 @@ import contextlib
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.orm import selectinload
 
 from src.core.config import settings
 from src.services.models import Base, Conversation, Message
@@ -38,6 +39,24 @@ async def init_db():
     async with async_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
+    # Migration: add user_id column to conversations if it doesn't exist
+    async with async_engine.begin() as conn:
+        from sqlalchemy import text
+
+        result = await conn.execute(
+            text(
+                "SELECT column_name FROM information_schema.columns "
+                "WHERE table_name='conversations' AND column_name='user_id'"
+            )
+        )
+        if not result.fetchone():
+            await conn.execute(
+                text("ALTER TABLE conversations ADD COLUMN user_id INTEGER REFERENCES users(id)")
+            )
+            await conn.execute(
+                text("CREATE INDEX ix_conversations_user_id ON conversations (user_id)")
+            )
+
     # Ensure sysadmin exists
     from src.services.auth_service import ensure_sysadmin_exists
 
@@ -49,37 +68,39 @@ async def init_db():
 
 
 async def create_conversation(
-    session: AsyncSession, title: str = "Nuova conversazione"
+    session: AsyncSession, title: str = "Nuova conversazione", user_id: int | None = None
 ) -> Conversation:
     """Create a new conversation."""
-    conv = Conversation(title=title)
+    conv = Conversation(title=title, user_id=user_id)
     session.add(conv)
     await session.commit()
     await session.refresh(conv)
     return conv
 
 
-async def get_conversations(session: AsyncSession) -> list[Conversation]:
-    """Get all conversations ordered by update time."""
-    result = await session.execute(
-        select(Conversation).order_by(Conversation.updated_at.desc())
-    )
+async def get_conversations(session: AsyncSession, user_id: int | None = None) -> list[Conversation]:
+    """Get conversations ordered by update time, filtered by user_id if provided."""
+    query = select(Conversation).options(selectinload(Conversation.user)).order_by(Conversation.updated_at.desc())
+    if user_id is not None:
+        query = query.filter(Conversation.user_id == user_id)
+    result = await session.execute(query)
     return list(result.scalars().all())
 
 
 async def get_conversation(
-    session: AsyncSession, conv_id: int
+    session: AsyncSession, conv_id: int, user_id: int | None = None
 ) -> Conversation | None:
-    """Get a single conversation by ID."""
-    result = await session.execute(
-        select(Conversation).filter(Conversation.id == conv_id)
-    )
+    """Get a single conversation by ID, optionally filtering by user_id."""
+    query = select(Conversation).filter(Conversation.id == conv_id)
+    if user_id is not None:
+        query = query.filter(Conversation.user_id == user_id)
+    result = await session.execute(query)
     return result.scalars().first()
 
 
-async def delete_conversation(session: AsyncSession, conv_id: int) -> bool:
-    """Delete a conversation by ID."""
-    conv = await get_conversation(session, conv_id)
+async def delete_conversation(session: AsyncSession, conv_id: int, user_id: int | None = None) -> bool:
+    """Delete a conversation by ID, optionally verifying ownership."""
+    conv = await get_conversation(session, conv_id, user_id=user_id)
     if conv:
         await session.delete(conv)
         await session.commit()
@@ -112,10 +133,10 @@ async def get_messages(session: AsyncSession, conv_id: int) -> list[Message]:
 
 
 async def update_conversation_title(
-    session: AsyncSession, conv_id: int, title: str
+    session: AsyncSession, conv_id: int, title: str, user_id: int | None = None
 ) -> bool:
     """Update the title of a conversation."""
-    conv = await get_conversation(session, conv_id)
+    conv = await get_conversation(session, conv_id, user_id=user_id)
     if conv:
         conv.title = title
         await session.commit()

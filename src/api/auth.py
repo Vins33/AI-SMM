@@ -1,16 +1,17 @@
 # src/api/auth.py
 """Authentication API endpoints."""
 
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Annotated, AsyncGenerator
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from pydantic import BaseModel, EmailStr
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.config import settings
-from src.core.security import create_access_token, create_refresh_token, decode_access_token
+from src.core.security import create_access_token, create_refresh_token, decode_access_token, verify_password
 from src.services.auth_models import User, UserRole
 from src.services.auth_service import (
     authenticate_user,
@@ -18,8 +19,10 @@ from src.services.auth_service import (
     get_user_by_email,
     get_user_by_id,
     get_user_by_username,
+    update_user,
 )
 from src.services.database import AsyncSessionLocal
+from src.services.models import Conversation, Message
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -37,6 +40,15 @@ class UserCreate(BaseModel):
     password: str
 
 
+class UserUpdate(BaseModel):
+    """Schema for user profile update."""
+
+    username: str | None = None
+    email: EmailStr | None = None
+    current_password: str | None = None
+    new_password: str | None = None
+
+
 class UserResponse(BaseModel):
     """Schema for user response."""
 
@@ -45,9 +57,24 @@ class UserResponse(BaseModel):
     email: str
     role: str
     is_active: bool
+    created_at: datetime | None = None
+    last_login: datetime | None = None
 
     class Config:
         from_attributes = True
+
+
+class UserStatsResponse(BaseModel):
+    """Schema for user statistics."""
+
+    total_conversations: int
+    total_messages: int
+    messages_sent: int
+    messages_received: int
+    first_activity: datetime | None = None
+    last_activity: datetime | None = None
+    avg_messages_per_conversation: float
+    account_age_days: int
 
 
 class Token(BaseModel):
@@ -192,9 +219,7 @@ async def login(
         data={"sub": str(user.id), "username": user.username, "role": user.role},
         expires_delta=access_token_expires,
     )
-    refresh_token = create_refresh_token(
-        data={"sub": str(user.id), "username": user.username}
-    )
+    refresh_token = create_refresh_token(data={"sub": str(user.id), "username": user.username})
 
     return Token(access_token=access_token, refresh_token=refresh_token)
 
@@ -225,9 +250,7 @@ async def refresh_token(
         data={"sub": str(user.id), "username": user.username, "role": user.role},
         expires_delta=access_token_expires,
     )
-    new_refresh_token = create_refresh_token(
-        data={"sub": str(user.id), "username": user.username}
-    )
+    new_refresh_token = create_refresh_token(data={"sub": str(user.id), "username": user.username})
 
     return Token(access_token=access_token, refresh_token=new_refresh_token)
 
@@ -236,3 +259,119 @@ async def refresh_token(
 async def get_me(current_user: Annotated[User, Depends(get_current_user)]):
     """Get current user information."""
     return current_user
+
+
+@router.put("/me", response_model=UserResponse)
+async def update_me(
+    user_data: UserUpdate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Update current user's profile information."""
+    # If changing password, verify current password
+    if user_data.new_password:
+        if not user_data.current_password:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="La password attuale è richiesta per cambiare password",
+            )
+        if not verify_password(user_data.current_password, current_user.hashed_password):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Password attuale non corretta",
+            )
+
+    # Check username uniqueness
+    if user_data.username and user_data.username != current_user.username:
+        existing = await get_user_by_username(session, user_data.username)
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Username già in uso",
+            )
+
+    # Check email uniqueness
+    if user_data.email and user_data.email != current_user.email:
+        existing = await get_user_by_email(session, user_data.email)
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email già in uso",
+            )
+
+    updated = await update_user(
+        session,
+        current_user.id,
+        username=user_data.username,
+        email=user_data.email,
+        password=user_data.new_password,
+    )
+    return updated
+
+
+@router.get("/me/stats", response_model=UserStatsResponse)
+async def get_my_stats(
+    current_user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Get current user's usage statistics."""
+    # Total conversations for this user
+    conv_result = await session.execute(
+        select(func.count(Conversation.id)).filter(Conversation.user_id == current_user.id)
+    )
+    total_conversations = conv_result.scalar() or 0
+
+    # Total messages in this user's conversations
+    msg_result = await session.execute(
+        select(func.count(Message.id)).join(Conversation).filter(Conversation.user_id == current_user.id)
+    )
+    total_messages = msg_result.scalar() or 0
+
+    # Messages sent by user (role="user") in their conversations
+    sent_result = await session.execute(
+        select(func.count(Message.id))
+        .join(Conversation)
+        .filter(Conversation.user_id == current_user.id, Message.role == "user")
+    )
+    messages_sent = sent_result.scalar() or 0
+
+    # Messages received (agent responses) in their conversations
+    received_result = await session.execute(
+        select(func.count(Message.id))
+        .join(Conversation)
+        .filter(Conversation.user_id == current_user.id, Message.role == "assistant")
+    )
+    messages_received = received_result.scalar() or 0
+
+    # First activity (oldest message in user's conversations)
+    first_result = await session.execute(
+        select(func.min(Message.timestamp)).join(Conversation).filter(Conversation.user_id == current_user.id)
+    )
+    first_activity = first_result.scalar()
+
+    # Last activity (newest message in user's conversations)
+    last_result = await session.execute(
+        select(func.max(Message.timestamp)).join(Conversation).filter(Conversation.user_id == current_user.id)
+    )
+    last_activity = last_result.scalar()
+
+    # Average messages per conversation
+    avg_messages = total_messages / total_conversations if total_conversations > 0 else 0.0
+
+    # Account age
+    now = datetime.now(timezone.utc)
+    created = current_user.created_at
+    if created and created.tzinfo is None:
+        created = created.replace(tzinfo=timezone.utc)
+    account_age_days = (now - created).days if created else 0
+
+    return UserStatsResponse(
+        total_conversations=total_conversations,
+        total_messages=total_messages,
+        messages_sent=messages_sent,
+        messages_received=messages_received,
+        first_activity=first_activity,
+        last_activity=last_activity,
+        avg_messages_per_conversation=round(avg_messages, 1),
+        account_age_days=account_age_days,
+    )

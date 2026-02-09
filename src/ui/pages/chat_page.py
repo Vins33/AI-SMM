@@ -20,8 +20,10 @@ from src.ui.components.sidebar import ConversationList
 class ChatPage:
     """Main chat page with conversation management - ChatGPT style."""
 
-    def __init__(self, is_dark: bool = True):
+    def __init__(self, is_dark: bool = True, user_id: int | None = None, role: str = "user"):
         self.is_dark = is_dark
+        self.user_id = user_id
+        self.role = role
         self.selected_conv_id: int | None = None
         self.sidebar: ConversationList | None = None
         self.chat_container: ChatContainer | None = None
@@ -47,6 +49,7 @@ class ChatPage:
                 on_delete=self._on_delete_conversation,
                 on_rename=self._on_rename_conversation,
                 is_dark=self.is_dark,
+                show_owner=self.role == "sysadmin",
             )
 
             # Main chat area - WhatsApp style
@@ -55,9 +58,7 @@ class ChatPage:
 
             with ui.column().classes("flex-grow h-full bg-[#0b141a] rounded-3xl overflow-hidden ml-2"):
                 # Header - WhatsApp style with gradient
-                with ui.row().classes(
-                    f"w-full px-4 py-3 {header_bg} items-center gap-3 shadow-md"
-                ):
+                with ui.row().classes(f"w-full px-4 py-3 {header_bg} items-center gap-3 shadow-md"):
                     # Avatar
                     with ui.element("div").classes(
                         "w-10 h-10 rounded-full bg-gradient-to-br from-green-400 to-teal-600 "
@@ -73,10 +74,13 @@ class ChatPage:
                         ui.label("online").classes("text-xs text-green-300")
 
                     # Loading spinner
-                    self.loading_spinner = ui.spinner(
-                        "dots", size="md", color="white"
-                    ).classes("ml-4")
+                    self.loading_spinner = ui.spinner("dots", size="md", color="white").classes("ml-4")
                     self.loading_spinner.visible = False
+
+                    # Profile button
+                    ui.button(icon="person", on_click=lambda: ui.navigate.to("/profile")).props("flat round").classes(
+                        "text-white"
+                    ).tooltip("Il Mio Profilo")
 
                     # Admin button (only for sysadmin)
                     role = app.storage.user.get("role", "")
@@ -86,26 +90,26 @@ class ChatPage:
                         ).classes("text-white").tooltip("Admin Panel")
 
                     # Logout button
-                    ui.button(icon="logout", on_click=lambda: ui.navigate.to("/logout")).props(
-                        "flat round"
-                    ).classes("text-white").tooltip("Logout")
+                    ui.button(icon="logout", on_click=lambda: ui.navigate.to("/logout")).props("flat round").classes(
+                        "text-white"
+                    ).tooltip("Logout")
 
                 # Chat messages
                 self.chat_container = ChatContainer(is_dark=self.is_dark)
 
                 # Chat input area - WhatsApp style
-                self.chat_input = ChatInput(
-                    on_send=self._on_send_message, is_dark=self.is_dark
-                )
+                self.chat_input = ChatInput(on_send=self._on_send_message, is_dark=self.is_dark)
 
         # Auto-select first conversation if exists
         if conversations:
             await self._on_conversation_select(conversations[0].id)
 
     async def _load_conversations(self) -> list:
-        """Load all conversations from database."""
+        """Load conversations for the current user (or all for sysadmin)."""
         async with get_db_session() as session:
-            return await get_conversations(session)
+            if self.role == "sysadmin":
+                return await get_conversations(session)  # tutte le conversazioni
+            return await get_conversations(session, user_id=self.user_id)
 
     async def _load_messages(self, conv_id: int) -> list:
         """Load messages for a conversation."""
@@ -126,7 +130,7 @@ class ChatPage:
     async def _on_new_conversation(self):
         """Create a new conversation."""
         async with get_db_session() as session:
-            conv = await create_conversation(session)
+            conv = await create_conversation(session, user_id=self.user_id)
             self.selected_conv_id = conv.id
 
         conversations = await self._load_conversations()
@@ -136,7 +140,9 @@ class ChatPage:
     async def _on_delete_conversation(self, conv_id: int):
         """Delete a conversation."""
         async with get_db_session() as session:
-            await delete_conversation(session, conv_id)
+            # Sysadmin può eliminare qualsiasi conversazione
+            uid = None if self.role == "sysadmin" else self.user_id
+            await delete_conversation(session, conv_id, user_id=uid)
 
         if self.selected_conv_id == conv_id:
             self.selected_conv_id = None
@@ -151,7 +157,8 @@ class ChatPage:
     async def _on_rename_conversation(self, conv_id: int, new_title: str):
         """Rename a conversation."""
         async with get_db_session() as session:
-            await update_conversation_title(session, conv_id, new_title)
+            uid = None if self.role == "sysadmin" else self.user_id
+            await update_conversation_title(session, conv_id, new_title, user_id=uid)
 
         conversations = await self._load_conversations()
         self.sidebar.update(conversations, self.selected_conv_id)
@@ -188,9 +195,7 @@ class ChatPage:
 
             # Save and display response
             async with get_db_session() as session:
-                await add_message(
-                    session, self.selected_conv_id, "assistant", response_text
-                )
+                await add_message(session, self.selected_conv_id, "assistant", response_text)
             self.chat_container.add_message("assistant", response_text)
 
         except Exception as e:

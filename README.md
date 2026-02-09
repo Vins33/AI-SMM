@@ -22,6 +22,10 @@ Applicazione web per chattare con un agente finanziario AI basato su LangGraph, 
   - Esplorazione database
   - Esecuzione query SQL
   - Statistiche sistema
+- 👤 **Pagina Profilo Utente** con:
+  - Statistiche personali (conversazioni, messaggi, media, giorni attività)
+  - Modifica profilo (username, email, password)
+  - Insights e livello di utilizzo (Nuovo → Esperto)
 - ⚙️ **Prompt configurabili** via YAML
 - 🔧 **LLM configurabile** (context window, temperatura, keep-alive)
 - 🚀 **Production-ready** (Kubernetes, health checks, structured logging)
@@ -257,6 +261,7 @@ classifier/
 │           ├── __init__.py
 │           ├── chat_page.py    # Pagina chat principale
 │           ├── login_page.py   # Pagine login e registrazione
+│           ├── profile_page.py # Pagina profilo utente (stats, editing, insights)
 │           └── admin_page.py   # Dashboard amministrazione
 ├── data/                       # Dati esempio
 ├── ollama_setup/               # Setup Ollama Docker
@@ -273,27 +278,50 @@ classifier/
 ### Variabili ambiente (.env)
 
 ```env
+# Application
+APP_NAME=
+APP_VERSION=
+ENVIRONMENT=
+
+# Logging
+LOG_LEVEL=
+LOG_JSON_FORMAT=
+
 # PostgreSQL
-POSTGRES_USER=myuser
-POSTGRES_PASSWORD=mypassword
-POSTGRES_DB=instagram_content_db
-DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres_db:5432/${POSTGRES_DB}
+DATABASE_URL=
+CHECKPOINT_PG_DSN=
+DB_POOL_SIZE=
+DB_MAX_OVERFLOW=
 
-# Servizi
-OLLAMA_BASE_URL=http://ollama:11434
-QDRANT_HOST=qdrant
-QDRANT_PORT=6333
+# LLM (Ollama)
+OLLAMA_BASE_URL=
+LLM_MODEL_NAME=
+LLM_TEMPERATURE=
+LLM_KEEP_ALIVE=
+LLM_NUM_CTX=
+LLM_SEED=
+LLM_TIMEOUT=
 
-# Modelli
-EMBEDDING_MODEL_NAME=nomic-embed-text
-LLM_MODEL_NAME=gpt-oss:20b
+# Vector Store (Qdrant)
+QDRANT_HOST=
+QDRANT_PORT=
+QDRANT_TIMEOUT=
+EMBEDDING_MODEL_NAME=
 
 # API Keys
-SERPAPI_API_KEY=your_api_key_here
+SERPAPI_API_KEY=
 
-# Autenticazione (opzionale - genera automaticamente se non specificato)
-SECRET_KEY=your-super-secret-key-here
-ACCESS_TOKEN_EXPIRE_MINUTES=30
+# Health Checks
+HEALTH_CHECK_TIMEOUT=
+
+# Autenticazione
+SECRET_KEY=
+ACCESS_TOKEN_EXPIRE_MINUTES=
+
+# Admin Credentials (primo avvio)
+SYSADMIN_USERNAME=
+SYSADMIN_EMAIL=
+SYSADMIN_PASSWORD=
 ```
 
 ### Configurazione LLM (src/core/config.py)
@@ -379,6 +407,8 @@ tools:
 | POST | `/api/conversations/` | Nuova conversazione |
 | GET | `/api/conversations/{id}/messages/` | Messaggi conversazione |
 | POST | `/api/conversations/{id}/messages/` | Nuovo messaggio |
+| PUT | `/api/v1/auth/me` | Modifica profilo utente |
+| GET | `/api/v1/auth/me/stats` | Statistiche personali utente |
 
 ## Sviluppo
 
@@ -499,6 +529,7 @@ Al primo avvio viene creato automaticamente un utente sysadmin:
 | `/` | Chat con l'agente | Utenti autenticati |
 | `/login` | Pagina di login | Pubblico |
 | `/register` | Registrazione nuovo utente | Pubblico |
+| `/profile` | Profilo utente e statistiche | Utenti autenticati |
 | `/admin` | Dashboard amministrazione | Solo sysadmin |
 | `/logout` | Logout | Utenti autenticati |
 
@@ -518,6 +549,16 @@ curl -X POST http://localhost:8000/api/v1/auth/login \
 
 # Usa il token per richieste autenticate
 curl -X GET http://localhost:8000/api/v1/auth/me \
+  -H "Authorization: Bearer <access_token>"
+
+# Modifica profilo
+curl -X PUT http://localhost:8000/api/v1/auth/me \
+  -H "Authorization: Bearer <access_token>" \
+  -H "Content-Type: application/json" \
+  -d '{"username": "nuovo_nome", "email": "nuova@email.com"}'
+
+# Statistiche personali
+curl -X GET http://localhost:8000/api/v1/auth/me/stats \
   -H "Authorization: Bearer <access_token>"
 ```
 
@@ -571,6 +612,6 @@ Maggiori info: https://creativecommons.org/licenses/by-nc/4.0/
 
 ---
 
-**Versione**: 2.1.1  
-**Ultimo aggiornamento**: 2026-02-05  
+**Versione**: 2.2.0  
+**Ultimo aggiornamento**: 2026-02-09  
 **Autore**: Vincenzo

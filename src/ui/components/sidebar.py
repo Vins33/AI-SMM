@@ -18,6 +18,7 @@ class ConversationList:
         on_delete: callable,
         on_rename: callable = None,
         is_dark: bool = True,
+        show_owner: bool = False,
     ):
         self.conversations = conversations
         self.on_select = on_select
@@ -25,6 +26,7 @@ class ConversationList:
         self.on_delete = on_delete
         self.on_rename = on_rename
         self.is_dark = is_dark
+        self.show_owner = show_owner
         self.selected_id = None
         self.list_container = None
         self._render()
@@ -93,7 +95,10 @@ class ConversationList:
                         ui.label(time_str).classes(f"{secondary_text} text-xs")
 
                 # Preview text
-                ui.label("Clicca per aprire...").classes(f"truncate {secondary_text} text-sm")
+                if self.show_owner and hasattr(conv, "user") and conv.user:
+                    ui.label(f"👤 {conv.user.username}").classes("truncate text-teal-400 text-xs")
+                else:
+                    ui.label("Clicca per aprire...").classes(f"truncate {secondary_text} text-sm")
 
             # Action buttons (visible on hover)
             with ui.column().classes("opacity-0 group-hover:opacity-100 gap-1"):
