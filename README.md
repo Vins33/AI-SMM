@@ -18,6 +18,7 @@ Applicazione web per chattare con un agente finanziario AI basato su LangGraph, 
 - 🎨 **UI moderna WhatsApp-style** con NiceGUI (dark theme, angoli smussati, responsive)
 - 🔐 **Autenticazione JWT** con ruoli (user, admin, sysadmin)
   - Registrazione e login con validazione password forte
+  - ✉️ **Verifica email** alla registrazione (Resend API) — l'utente accede subito, banner di promemoria in chat
   - Logout server-side con token blacklist (JTI)
   - Account lockout dopo tentativi falliti
   - Eliminazione account self-service
@@ -53,6 +54,7 @@ Applicazione web per chattare con un agente finanziario AI basato su LangGraph, 
 | **Agent Framework** | LangGraph + LangChain |
 | **Checkpointing** | LangGraph AsyncPostgresSaver |
 | **Auth** | JWT (python-jose) + bcrypt (passlib) |
+| **Email** | [Resend](https://resend.com/docs) API (verifica email) |
 | **Deploy** | Kubernetes (Kustomize) |
 
 ## Requisiti
@@ -256,6 +258,7 @@ classifier/
 │   │   ├── database.py         # SQLAlchemy async + CRUD
 │   │   ├── auth_models.py      # Modelli User e ruoli
 │   │   ├── auth_service.py     # Servizio autenticazione
+│   │   ├── email_service.py    # Invio email di verifica (Resend API)
 │   │   ├── financial.py        # Analisi titoli (yfinance)
 │   │   ├── knowledge.py        # Ricerca web (SerpAPI)
 │   │   ├── llm.py              # Servizio Ollama
@@ -327,13 +330,21 @@ HEALTH_CHECK_TIMEOUT=
 
 # Autenticazione
 SECRET_KEY=
+STORAGE_SECRET=
 ACCESS_TOKEN_EXPIRE_MINUTES=
 
 # Admin Credentials (primo avvio)
 SYSADMIN_USERNAME=
 SYSADMIN_EMAIL=
 SYSADMIN_PASSWORD=
+
+# Email Verification (Resend API)
+RESEND_API_KEY=           # API key da https://resend.com
+RESEND_FROM_EMAIL=        # Default: onboarding@resend.dev
+BASE_URL=                 # URL pubblico dell'app (per link di verifica)
 ```
+
+> **Nota sul dominio dev di Resend**: Con il dominio di test (`onboarding@resend.dev`) puoi inviare email **solo al tuo indirizzo** registrato su Resend. Per inviare ad altri destinatari, verifica un dominio tuo su [resend.com/domains](https://resend.com/domains) e aggiorna `RESEND_FROM_EMAIL` nel `.env` (es. `noreply@tuodominio.com`).
 
 ### Configurazione LLM (src/core/config.py)
 
@@ -420,6 +431,8 @@ tools:
 | POST | `/api/conversations/{id}/messages/` | Nuovo messaggio |
 | PUT | `/api/v1/auth/me` | Modifica profilo utente |
 | GET | `/api/v1/auth/me/stats` | Statistiche personali utente |
+| GET | `/api/v1/auth/verify-email?token=` | Verifica email tramite token |
+| POST | `/api/v1/auth/resend-verification` | Reinvio email di verifica |
 
 ## Sviluppo
 
@@ -540,6 +553,7 @@ Al primo avvio viene creato automaticamente un utente sysadmin:
 | `/` | Chat con l'agente | Utenti autenticati |
 | `/login` | Pagina di login | Pubblico |
 | `/register` | Registrazione nuovo utente | Pubblico |
+| `/verify-email` | Landing page verifica email | Pubblico (con token) |
 | `/profile` | Profilo utente e statistiche | Utenti autenticati |
 | `/admin` | Dashboard amministrazione | Solo sysadmin |
 | `/logout` | Logout | Utenti autenticati |
@@ -547,10 +561,10 @@ Al primo avvio viene creato automaticamente un utente sysadmin:
 ### API Autenticazione
 
 ```bash
-# Registrazione
+# Registrazione (invia email di verifica automaticamente)
 curl -X POST http://localhost:8000/api/v1/auth/register \
   -H "Content-Type: application/json" \
-  -d '{"username": "newuser", "email": "user@example.com", "password": "password123"}'
+  -d '{"username": "newuser", "email": "user@example.com", "password": "SecureP@ss1"}'
 
 # Login
 curl -X POST http://localhost:8000/api/v1/auth/login \
@@ -623,6 +637,6 @@ Maggiori info: https://creativecommons.org/licenses/by-nc/4.0/
 
 ---
 
-**Versione**: 2.2.0  
+**Versione**: 2.3.0  
 **Ultimo aggiornamento**: 2026-02-09  
 **Autore**: Vincenzo

@@ -337,6 +337,10 @@ class ProfilePage:
                         info_items = [
                             ("👤 Username", user.get("username", "-")),
                             ("📧 Email", user.get("email", "-")),
+                            (
+                                "✉️ Email verificata",
+                                "✅ Sì" if user.get("email_verified") else "❌ No",
+                            ),
                             ("🛡️ Ruolo", user.get("role", "-").upper()),
                             ("✅ Stato", "Attivo" if user.get("is_active") else "Inattivo"),
                         ]

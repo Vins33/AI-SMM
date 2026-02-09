@@ -165,6 +165,68 @@ async def admin_page():
     await admin.render()
 
 
+@ui.page("/verify-email")
+async def verify_email_page(token: str = ""):
+    """Email verification landing page."""
+    ui.dark_mode(True)
+    ui.add_head_html(
+        """
+        <style>
+            body { margin: 0; padding: 0; background-color: #0b141a; }
+            .nicegui-content { height: 100vh; display: flex; justify-content: center; align-items: center; }
+        </style>
+        """
+    )
+
+    with ui.card().classes("w-96 p-8 bg-[#202c33] rounded-2xl shadow-2xl text-center"):
+        if not token:
+            ui.icon("error").classes("text-6xl text-red-400 mb-4 mx-auto")
+            ui.label("Link non valido").classes("text-xl font-bold text-white mb-2")
+            ui.label("Il link di verifica non contiene un token valido.").classes(
+                "text-gray-400 text-sm mb-4"
+            )
+        else:
+            # Call the API to verify
+            import httpx
+
+            try:
+                async with httpx.AsyncClient(base_url="http://localhost:8000") as client:
+                    response = await client.get(
+                        f"/api/v1/auth/verify-email?token={token}"
+                    )
+
+                if response.status_code == 200:
+                    ui.icon("check_circle").classes("text-6xl text-green-400 mb-4 mx-auto")
+                    ui.label("Email Verificata!").classes("text-xl font-bold text-white mb-2")
+                    ui.label("Il tuo indirizzo email è stato verificato con successo.").classes(
+                        "text-gray-400 text-sm mb-4"
+                    )
+                    # Update session storage if user is logged in
+                    if nicegui_app.storage.user.get("access_token"):
+                        nicegui_app.storage.user["email_verified"] = True
+                else:
+                    error_detail = "Errore nella verifica"
+                    try:
+                        error_detail = response.json().get("detail", error_detail)
+                    except Exception:
+                        pass
+                    ui.icon("error").classes("text-6xl text-red-400 mb-4 mx-auto")
+                    ui.label("Verifica fallita").classes("text-xl font-bold text-white mb-2")
+                    ui.label(error_detail).classes("text-gray-400 text-sm mb-4")
+            except Exception as e:
+                ui.icon("error").classes("text-6xl text-red-400 mb-4 mx-auto")
+                ui.label("Errore").classes("text-xl font-bold text-white mb-2")
+                ui.label(f"Errore di connessione: {e}").classes("text-gray-400 text-sm mb-4")
+
+        ui.button(
+            "Vai alla Chat",
+            on_click=lambda: ui.navigate.to("/"),
+        ).classes(
+            "w-full bg-gradient-to-r from-green-500 to-teal-600 text-white py-3 "
+            "rounded-lg font-semibold hover:from-green-600 hover:to-teal-700 mt-2"
+        )
+
+
 @ui.page("/logout")
 async def logout_page():
     """Logout: blacklist token server-side and clear client session."""

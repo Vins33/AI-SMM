@@ -32,6 +32,31 @@ async def get_user_by_id(session: AsyncSession, user_id: int) -> User | None:
     return result.scalars().first()
 
 
+async def get_user_by_verification_token(session: AsyncSession, token: str) -> User | None:
+    """Get a user by email verification token."""
+    result = await session.execute(
+        select(User).filter(User.email_verification_token == token)
+    )
+    return result.scalars().first()
+
+
+async def set_email_verification_token(
+    session: AsyncSession, user: User, token: str
+) -> None:
+    """Store verification token and timestamp on user."""
+    user.email_verification_token = token
+    user.email_verification_sent_at = datetime.now(timezone.utc)
+    await session.commit()
+
+
+async def verify_user_email(session: AsyncSession, user: User) -> None:
+    """Mark user email as verified and clear token."""
+    user.email_verified = True
+    user.email_verification_token = None
+    user.email_verification_sent_at = None
+    await session.commit()
+
+
 async def create_user(
     session: AsyncSession,
     username: str,

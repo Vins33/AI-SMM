@@ -75,6 +75,27 @@ async def init_db():
                 text("ALTER TABLE users ADD COLUMN locked_until TIMESTAMPTZ")
             )
 
+    # Migration: add email verification columns to users if they don't exist
+    async with async_engine.begin() as conn:
+        from sqlalchemy import text
+
+        result = await conn.execute(
+            text(
+                "SELECT column_name FROM information_schema.columns "
+                "WHERE table_name='users' AND column_name='email_verified'"
+            )
+        )
+        if not result.fetchone():
+            await conn.execute(
+                text("ALTER TABLE users ADD COLUMN email_verified BOOLEAN DEFAULT FALSE NOT NULL")
+            )
+            await conn.execute(
+                text("ALTER TABLE users ADD COLUMN email_verification_token VARCHAR(255)")
+            )
+            await conn.execute(
+                text("ALTER TABLE users ADD COLUMN email_verification_sent_at TIMESTAMPTZ")
+            )
+
     # Ensure sysadmin exists
     from src.services.auth_service import ensure_sysadmin_exists
 
