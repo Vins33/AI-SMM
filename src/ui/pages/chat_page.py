@@ -57,6 +57,11 @@ class ChatPage:
             text_class = "text-white"
 
             with ui.column().classes("flex-grow h-full bg-[#0b141a] rounded-3xl overflow-hidden ml-2"):
+                # Email verification banner (if not verified)
+                email_verified = app.storage.user.get("email_verified", True)
+                if not email_verified:
+                    self._render_verification_banner()
+
                 # Header - WhatsApp style with gradient
                 with ui.row().classes(f"w-full px-4 py-3 {header_bg} items-center gap-3 shadow-md"):
                     # Avatar
@@ -110,6 +115,40 @@ class ChatPage:
             if self.role == "sysadmin":
                 return await get_conversations(session)  # tutte le conversazioni
             return await get_conversations(session, user_id=self.user_id)
+
+    def _render_verification_banner(self):
+        """Render email verification warning banner."""
+        with ui.element("div").classes(
+            "w-full bg-amber-900/60 border-b border-amber-700 px-4 py-2 flex items-center gap-3"
+        ):
+            ui.icon("warning").classes("text-amber-400 text-lg")
+            ui.label(
+                "La tua email non è ancora verificata. Controlla la tua casella di posta."
+            ).classes("text-amber-200 text-sm flex-grow")
+            ui.button(
+                "Reinvia email",
+                on_click=self._resend_verification,
+            ).props("flat dense size=sm").classes(
+                "text-amber-300 hover:text-white"
+            )
+
+    async def _resend_verification(self):
+        """Resend verification email via API."""
+        import httpx
+
+        token = app.storage.user.get("access_token", "")
+        try:
+            async with httpx.AsyncClient(base_url="http://localhost:8000") as client:
+                response = await client.post(
+                    "/api/v1/auth/resend-verification",
+                    headers={"Authorization": f"Bearer {token}"},
+                )
+                if response.status_code == 200:
+                    ui.notify("Email di verifica inviata!", type="positive")
+                else:
+                    ui.notify("Errore nell'invio dell'email", type="negative")
+        except Exception:
+            ui.notify("Errore di connessione", type="negative")
 
     async def _load_messages(self, conv_id: int) -> list:
         """Load messages for a conversation."""

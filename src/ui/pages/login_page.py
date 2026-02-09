@@ -114,6 +114,7 @@ class LoginPage:
                         user_data = user_response.json()
                         app.storage.user["role"] = user_data["role"]
                         app.storage.user["user_id"] = user_data["id"]
+                        app.storage.user["email_verified"] = user_data.get("email_verified", False)
 
                     if self.on_login_success:
                         await self.on_login_success()
@@ -269,7 +270,10 @@ class RegisterPage:
                 )
 
                 if response.status_code == 200:
-                    self.success_label.text = "Registrazione completata! Ora puoi accedere."
+                    self.success_label.text = (
+                        "Registrazione completata! Ti abbiamo inviato un'email di verifica. "
+                        "Puoi accedere subito e verificare l'email in seguito."
+                    )
                     self.success_label.visible = True
                     # Clear inputs
                     self.username_input.value = ""

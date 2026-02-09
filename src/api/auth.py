@@ -28,8 +28,11 @@ from src.services.auth_service import (
     get_user_by_email,
     get_user_by_id,
     get_user_by_username,
+    get_user_by_verification_token,
     is_token_blacklisted,
+    set_email_verification_token,
     update_user,
+    verify_user_email,
 )
 from src.services.database import AsyncSessionLocal
 from src.services.models import Conversation, Message
@@ -67,6 +70,7 @@ class UserResponse(BaseModel):
     email: str
     role: str
     is_active: bool
+    email_verified: bool = False
     created_at: datetime | None = None
     last_login: datetime | None = None
 
@@ -253,6 +257,13 @@ async def register(
         role=UserRole.USER,
     )
 
+    # Send verification email
+    from src.services.email_service import generate_verification_token, send_verification_email
+
+    token = generate_verification_token()
+    await set_email_verification_token(session, user, token)
+    send_verification_email(user_data.email, user_data.username, token)
+
     # Audit log
     await create_audit_log(
         session,
@@ -323,6 +334,63 @@ async def login(
     )
 
     return Token(access_token=access_token, refresh_token=refresh_token)
+
+
+@router.get("/verify-email")
+async def verify_email(
+    token: str,
+    session: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Verify user email via token link."""
+    user = await get_user_by_verification_token(session, token)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Token di verifica non valido o già utilizzato",
+        )
+
+    # Check token expiration
+    if user.email_verification_sent_at:
+        sent_at = user.email_verification_sent_at
+        if sent_at.tzinfo is None:
+            sent_at = sent_at.replace(tzinfo=timezone.utc)
+        expires_at = sent_at + timedelta(hours=settings.EMAIL_VERIFICATION_EXPIRE_HOURS)
+        if datetime.now(timezone.utc) > expires_at:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Il link di verifica è scaduto. Richiedi un nuovo link.",
+            )
+
+    await verify_user_email(session, user)
+
+    await create_audit_log(
+        session,
+        action="email_verified",
+        user_id=user.id,
+        username=user.username,
+        target_type="user",
+        target_id=user.id,
+    )
+
+    return {"detail": "Email verificata con successo!"}
+
+
+@router.post("/resend-verification")
+async def resend_verification(
+    current_user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Resend verification email to current user."""
+    if current_user.email_verified:
+        return {"detail": "Email già verificata"}
+
+    from src.services.email_service import generate_verification_token, send_verification_email
+
+    token = generate_verification_token()
+    await set_email_verification_token(session, current_user, token)
+    send_verification_email(current_user.email, current_user.username, token)
+
+    return {"detail": "Email di verifica inviata"}
 
 
 @router.post("/logout")

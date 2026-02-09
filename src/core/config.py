@@ -30,6 +30,12 @@ class Settings(BaseSettings):
     PASSWORD_MIN_LENGTH: int = 8
     STORAGE_SECRET: str
 
+    # Email verification (Resend API)
+    RESEND_API_KEY: str = ""
+    RESEND_FROM_EMAIL: str = "onboarding@resend.dev"
+    EMAIL_VERIFICATION_EXPIRE_HOURS: int = 24
+    BASE_URL: str = "http://localhost:8000"  # Public URL for verification links
+
     # Database
     DATABASE_URL: str
     CHECKPOINT_PG_DSN: str = ""
