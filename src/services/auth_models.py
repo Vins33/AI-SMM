@@ -4,6 +4,7 @@
 from enum import Enum
 
 from sqlalchemy import Boolean, Column, DateTime, Integer, String, func
+from sqlalchemy.orm import relationship
 
 from src.services.models import Base
 
@@ -33,8 +34,8 @@ class User(Base):
     )
     last_login = Column(DateTime(timezone=True), nullable=True)
 
-    # Relationship with conversations (optional - for user-specific conversations)
-    # conversations = relationship("Conversation", back_populates="user")
+    # Relationship with conversations
+    conversations = relationship("Conversation", back_populates="user")
 
     def __repr__(self):
         return f"<User(id={self.id}, username={self.username}, role={self.role})>"

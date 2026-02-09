@@ -19,6 +19,7 @@ from src.services.database import init_db
 from src.ui.pages.admin_page import AdminDashboard
 from src.ui.pages.chat_page import ChatPage
 from src.ui.pages.login_page import LoginPage, RegisterPage
+from src.ui.pages.profile_page import ProfilePage
 
 # Setup logging first
 setup_logging(
@@ -115,14 +116,18 @@ async def index():
         </style>
         """
     )
-    
+
     # Check if user is authenticated
     token = nicegui_app.storage.user.get("access_token", "")
     if not token:
         ui.navigate.to("/login")
         return
-    
-    chat_page = ChatPage(is_dark=True)
+
+    # Extract user_id from storage for conversation segregation
+    user_id = nicegui_app.storage.user.get("user_id")
+    role = nicegui_app.storage.user.get("role", "user")
+
+    chat_page = ChatPage(is_dark=True, user_id=user_id, role=role)
     await chat_page.render()
 
 
@@ -140,6 +145,17 @@ async def register_page():
     # Don't auto-redirect - let user explicitly navigate
     register = RegisterPage(is_dark=True)
     await register.render()
+
+
+@ui.page("/profile")
+async def profile_page():
+    """User profile and insights page."""
+    token = nicegui_app.storage.user.get("access_token", "")
+    if not token:
+        ui.navigate.to("/login")
+        return
+    profile = ProfilePage(is_dark=True)
+    await profile.render()
 
 
 @ui.page("/admin")
