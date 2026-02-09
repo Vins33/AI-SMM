@@ -167,11 +167,20 @@ async def admin_page():
 
 @ui.page("/logout")
 async def logout_page():
-    """Logout and clear session."""
+    """Logout: blacklist token server-side and clear client session."""
     try:
+        import httpx
+
+        token = nicegui_app.storage.user.get("access_token", "")
+        if token:
+            async with httpx.AsyncClient(base_url="http://localhost:8000") as client:
+                await client.post(
+                    "/api/v1/auth/logout",
+                    headers={"Authorization": f"Bearer {token}"},
+                )
         nicegui_app.storage.user.clear()
     except Exception:
-        pass
+        nicegui_app.storage.user.clear()
     ui.navigate.to("/login")
 
 
@@ -179,7 +188,7 @@ async def logout_page():
 ui.run_with(
     fastapi_app,
     title="Agente Finanziario",
-    storage_secret="financial-agent-secret",
+    storage_secret=settings.STORAGE_SECRET,
 )
 
 # Alias for uvicorn compatibility (uvicorn src.main:app)

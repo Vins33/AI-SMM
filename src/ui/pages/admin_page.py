@@ -15,6 +15,7 @@ class AdminDashboard:
         self.query_input = None
         self.query_result = None
         self.selected_table = None
+        self.search_input = None
 
     def _get_auth_headers(self):
         """Get authorization headers."""
@@ -73,11 +74,15 @@ class AdminDashboard:
 
             ui.button("Logout", on_click=self._logout).classes("bg-red-600 hover:bg-red-700")
             ui.button("Chat", on_click=lambda: ui.navigate.to("/")).classes("bg-teal-600 hover:bg-teal-700 ml-2")
+            ui.button("Profilo", on_click=lambda: ui.navigate.to("/profile")).classes(
+                "bg-blue-600 hover:bg-blue-700 ml-2"
+            )
 
         # Main content with tabs
         with ui.tabs().classes("w-full bg-[#1a2730]") as tabs:
             stats_tab = ui.tab("Statistiche", icon="analytics")
             users_tab = ui.tab("Gestione Utenti", icon="people")
+            audit_tab = ui.tab("Audit Log", icon="history")
             db_tab = ui.tab("Database", icon="storage")
             query_tab = ui.tab("Query SQL", icon="code")
 
@@ -89,6 +94,10 @@ class AdminDashboard:
             # Users Management Panel
             with ui.tab_panel(users_tab).classes("p-6"):
                 await self._render_users_panel()
+
+            # Audit Log Panel
+            with ui.tab_panel(audit_tab).classes("p-6"):
+                await self._render_audit_panel()
 
             # Database Panel
             with ui.tab_panel(db_tab).classes("p-6"):
@@ -168,8 +177,15 @@ class AdminDashboard:
 
         ui.label("Gestione Utenti").classes("text-2xl font-bold text-white mb-6")
 
-        # Add user button
-        ui.button("+ Nuovo Utente", on_click=self._show_add_user_dialog).classes("bg-teal-600 hover:bg-teal-700 mb-4")
+        # Search and add user row
+        with ui.row().classes("w-full items-center gap-4 mb-4"):
+            self.search_input = (
+                ui.input(label="🔍 Cerca utenti...", placeholder="Username, email o ruolo")
+                .classes("flex-grow")
+                .props("dark outlined color=teal dense")
+            )
+            ui.button("Cerca", on_click=self._load_users_table).classes("bg-teal-600 hover:bg-teal-700")
+            ui.button("+ Nuovo Utente", on_click=self._show_add_user_dialog).classes("bg-teal-600 hover:bg-teal-700")
 
         # Users table container
         self.users_table_container = ui.column().classes("w-full")
@@ -184,14 +200,24 @@ class AdminDashboard:
 
         with self.users_table_container:
             try:
+                # Build query params with search
+                params = {"limit": 200}
+                if self.search_input and self.search_input.value:
+                    params["search"] = self.search_input.value
+
                 async with httpx.AsyncClient() as client:
                     response = await client.get(
                         "http://localhost:8000/api/v1/admin/users",
                         headers=self._get_auth_headers(),
+                        params=params,
                     )
 
                     if response.status_code == 200:
-                        users = response.json()
+                        data = response.json()
+                        users = data.get("users", data) if isinstance(data, dict) else data
+                        total = data.get("total", len(users)) if isinstance(data, dict) else len(users)
+
+                        ui.label(f"Totale: {total} utenti").classes("text-gray-400 text-sm mb-2")
 
                         columns = [
                             {"name": "id", "label": "ID", "field": "id", "align": "left"},
@@ -412,6 +438,66 @@ class AdminDashboard:
 
         dialog.open()
 
+    async def _render_audit_panel(self):
+        """Render audit log panel."""
+        import httpx
+
+        ui.label("Audit Log").classes("text-2xl font-bold text-white mb-6")
+
+        self.audit_container = ui.column().classes("w-full")
+
+        with self.audit_container:
+            try:
+                async with httpx.AsyncClient() as client:
+                    response = await client.get(
+                        "http://localhost:8000/api/v1/admin/audit-logs",
+                        headers=self._get_auth_headers(),
+                        params={"limit": 100},
+                    )
+
+                    if response.status_code == 200:
+                        data = response.json()
+                        logs = data.get("logs", [])
+                        total = data.get("total", 0)
+
+                        ui.label(f"Totale: {total} eventi").classes("text-gray-400 text-sm mb-4")
+
+                        if logs:
+                            columns = [
+                                {"name": "created_at", "label": "Data/Ora", "field": "created_at", "align": "left"},
+                                {"name": "action", "label": "Azione", "field": "action", "align": "left"},
+                                {"name": "username", "label": "Utente", "field": "username", "align": "left"},
+                                {"name": "target_type", "label": "Tipo Target", "field": "target_type", "align": "left"},
+                                {"name": "target_id", "label": "ID Target", "field": "target_id", "align": "center"},
+                                {"name": "ip_address", "label": "IP", "field": "ip_address", "align": "left"},
+                                {"name": "details", "label": "Dettagli", "field": "details", "align": "left"},
+                            ]
+
+                            rows = [
+                                {
+                                    "created_at": log["created_at"][:19].replace("T", " ") if log.get("created_at") else "",
+                                    "action": log.get("action", ""),
+                                    "username": log.get("username", "-"),
+                                    "target_type": log.get("target_type", "-"),
+                                    "target_id": str(log.get("target_id", "-")),
+                                    "ip_address": log.get("ip_address", "-"),
+                                    "details": (log.get("details", "") or "")[:80],
+                                }
+                                for log in logs
+                            ]
+
+                            ui.table(columns=columns, rows=rows).classes("w-full bg-[#202c33]").props(
+                                "dark flat dense"
+                            )
+                        else:
+                            ui.label("Nessun evento nel log").classes("text-gray-400")
+
+                    else:
+                        ui.label("Errore nel caricamento dei log").classes("text-red-400")
+
+            except Exception as e:
+                ui.label(f"Errore: {str(e)}").classes("text-red-400")
+
     async def _render_database_panel(self):
         """Render database explorer panel."""
         import httpx
@@ -580,6 +666,18 @@ class AdminDashboard:
                 ui.label(f"Errore: {str(e)}").classes("text-red-400")
 
     async def _logout(self):
-        """Logout user."""
+        """Logout user with server-side token blacklisting."""
+        import httpx
+
+        try:
+            token = app.storage.user.get("access_token", "")
+            if token:
+                async with httpx.AsyncClient(base_url="http://localhost:8000") as client:
+                    await client.post(
+                        "/api/v1/auth/logout",
+                        headers={"Authorization": f"Bearer {token}"},
+                    )
+        except Exception:
+            pass
         app.storage.user.clear()
         ui.navigate.to("/login")

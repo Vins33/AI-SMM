@@ -1,13 +1,15 @@
 # src/api/endpoints.py
-"""FastAPI API endpoints."""
+"""FastAPI API endpoints (legacy - protected with authentication)."""
 
 import logging
-from typing import AsyncGenerator
+from typing import Annotated, AsyncGenerator
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.api.auth import get_current_user
+from src.services.auth_models import User
 from src.services.database import (
     AsyncSessionLocal,
     add_message,
@@ -78,27 +80,36 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 db_dependency = Depends(get_db)
 
 
-# --- Endpoints ---
+# --- Endpoints (now protected) ---
 
 
 @router.get("/conversations/", response_model=list[ConversationResponse])
-async def list_conversations(session: AsyncSession = db_dependency):
-    """Get all conversations."""
-    return await get_conversations(session)
+async def list_conversations(
+    current_user: Annotated[User, Depends(get_current_user)],
+    session: AsyncSession = db_dependency,
+):
+    """Get all conversations for the current user."""
+    return await get_conversations(session, user_id=current_user.id)
 
 
 @router.post("/conversations/", response_model=ConversationResponse)
 async def new_conversation(
-    data: ConversationCreate, session: AsyncSession = db_dependency
+    data: ConversationCreate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    session: AsyncSession = db_dependency,
 ):
-    """Create a new conversation."""
-    return await create_conversation(session, data.title)
+    """Create a new conversation for the current user."""
+    return await create_conversation(session, data.title, user_id=current_user.id)
 
 
 @router.get(
     "/conversations/{conv_id}/messages/", response_model=list[MessageResponse]
 )
-async def list_messages(conv_id: int, session: AsyncSession = db_dependency):
+async def list_messages(
+    conv_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    session: AsyncSession = db_dependency,
+):
     """Get all messages for a conversation."""
     return await get_messages(session, conv_id)
 
@@ -107,7 +118,10 @@ async def list_messages(conv_id: int, session: AsyncSession = db_dependency):
     "/conversations/{conv_id}/messages/", response_model=MessageResponse
 )
 async def new_message(
-    conv_id: int, data: MessageCreate, session: AsyncSession = db_dependency
+    conv_id: int,
+    data: MessageCreate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    session: AsyncSession = db_dependency,
 ):
     """Add a message to a conversation."""
     return await add_message(session, conv_id, data.role, data.content)

@@ -1,24 +1,34 @@
 # src/api/auth.py
 """Authentication API endpoints."""
 
+import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Annotated, AsyncGenerator
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from pydantic import BaseModel, EmailStr
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.config import settings
-from src.core.security import create_access_token, create_refresh_token, decode_access_token, verify_password
+from src.core.security import (
+    create_access_token,
+    create_refresh_token,
+    decode_access_token,
+    validate_password_strength,
+    verify_password,
+)
 from src.services.auth_models import User, UserRole
 from src.services.auth_service import (
     authenticate_user,
+    blacklist_token,
+    create_audit_log,
     create_user,
     get_user_by_email,
     get_user_by_id,
     get_user_by_username,
+    is_token_blacklisted,
     update_user,
 )
 from src.services.database import AsyncSessionLocal
@@ -91,6 +101,13 @@ class TokenRefresh(BaseModel):
     refresh_token: str
 
 
+class DeleteAccountRequest(BaseModel):
+    """Schema for account self-deletion."""
+
+    password: str
+    confirmation: str = "DELETE"
+
+
 # --- Dependencies ---
 
 
@@ -116,6 +133,15 @@ async def get_current_user(
 
     payload = decode_access_token(token)
     if payload is None:
+        raise credentials_exception
+
+    # Check token type (must be access token)
+    if payload.get("type") != "access":
+        raise credentials_exception
+
+    # Check if token is blacklisted
+    jti = payload.get("jti")
+    if jti and await is_token_blacklisted(session, jti):
         raise credentials_exception
 
     user_id: int | None = payload.get("sub")
@@ -159,15 +185,50 @@ async def get_current_sysadmin_user(
     return current_user
 
 
+# --- Helpers ---
+
+
+def _get_client_ip(request: Request) -> str:
+    """Extract client IP from request."""
+    forwarded = request.headers.get("X-Forwarded-For")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+def _create_tokens(user: User) -> tuple[str, str, str]:
+    """Create access and refresh tokens with JTI. Returns (access_token, refresh_token, access_jti)."""
+    jti = str(uuid.uuid4())
+    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={"sub": str(user.id), "username": user.username, "role": user.role, "jti": jti},
+        expires_delta=access_token_expires,
+    )
+    refresh_jti = str(uuid.uuid4())
+    refresh_token = create_refresh_token(
+        data={"sub": str(user.id), "username": user.username, "jti": refresh_jti}
+    )
+    return access_token, refresh_token, jti
+
+
 # --- Endpoints ---
 
 
 @router.post("/register", response_model=UserResponse)
 async def register(
     user_data: UserCreate,
+    request: Request,
     session: Annotated[AsyncSession, Depends(get_db)],
 ):
     """Register a new user."""
+    # Validate password strength
+    password_errors = validate_password_strength(user_data.password)
+    if password_errors:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="; ".join(password_errors),
+        )
+
     # Check if username exists
     existing_user = await get_user_by_username(session, user_data.username)
     if existing_user:
@@ -191,41 +252,108 @@ async def register(
         password=user_data.password,
         role=UserRole.USER,
     )
+
+    # Audit log
+    await create_audit_log(
+        session,
+        action="user_registered",
+        user_id=user.id,
+        username=user.username,
+        target_type="user",
+        target_id=user.id,
+        ip_address=_get_client_ip(request),
+    )
+
     return user
 
 
 @router.post("/login", response_model=Token)
 async def login(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
+    request: Request,
     session: Annotated[AsyncSession, Depends(get_db)],
 ):
     """Login and get access token."""
     user = await authenticate_user(session, form_data.username, form_data.password)
     if not user:
+        # Check if account is locked
+        locked_user = await get_user_by_username(session, form_data.username)
+        if locked_user and locked_user.locked_until:
+            now = datetime.now(timezone.utc)
+            locked_until = locked_user.locked_until
+            if locked_until.tzinfo is None:
+                locked_until = locked_until.replace(tzinfo=timezone.utc)
+            if now < locked_until:
+                remaining = int((locked_until - now).total_seconds() // 60) + 1
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail=f"Account bloccato per troppi tentativi. Riprova tra {remaining} minuti.",
+                )
+
+        # Audit failed login
+        await create_audit_log(
+            session,
+            action="login_failed",
+            username=form_data.username,
+            details={"reason": "invalid_credentials"},
+            ip_address=_get_client_ip(request),
+        )
+
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
+            detail="Username o password non corretti",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
     if not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Inactive user",
+            detail="Account disattivato",
         )
 
-    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    access_token = create_access_token(
-        data={"sub": str(user.id), "username": user.username, "role": user.role},
-        expires_delta=access_token_expires,
+    access_token, refresh_token, _ = _create_tokens(user)
+
+    # Audit successful login
+    await create_audit_log(
+        session,
+        action="login_success",
+        user_id=user.id,
+        username=user.username,
+        ip_address=_get_client_ip(request),
     )
-    refresh_token = create_refresh_token(data={"sub": str(user.id), "username": user.username})
 
     return Token(access_token=access_token, refresh_token=refresh_token)
 
 
+@router.post("/logout")
+async def logout(
+    token: Annotated[str, Depends(oauth2_scheme)],
+    request: Request,
+    session: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Logout and blacklist current token."""
+    payload = decode_access_token(token)
+    if payload:
+        jti = payload.get("jti")
+        user_id = payload.get("sub")
+        exp = payload.get("exp")
+        if jti and user_id and exp:
+            expires_at = datetime.fromtimestamp(exp, tz=timezone.utc)
+            await blacklist_token(session, jti, int(user_id), expires_at)
+
+            await create_audit_log(
+                session,
+                action="logout",
+                user_id=int(user_id),
+                username=payload.get("username"),
+                ip_address=_get_client_ip(request),
+            )
+
+    return {"detail": "Logout effettuato con successo"}
+
+
 @router.post("/refresh", response_model=Token)
-async def refresh_token(
+async def refresh_token_endpoint(
     token_data: TokenRefresh,
     session: Annotated[AsyncSession, Depends(get_db)],
 ):
@@ -237,6 +365,14 @@ async def refresh_token(
             detail="Invalid refresh token",
         )
 
+    # Check if refresh token is blacklisted
+    old_jti = payload.get("jti")
+    if old_jti and await is_token_blacklisted(session, old_jti):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token revocato",
+        )
+
     user_id = payload.get("sub")
     user = await get_user_by_id(session, int(user_id))
     if not user or not user.is_active:
@@ -245,12 +381,14 @@ async def refresh_token(
             detail="User not found or inactive",
         )
 
-    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    access_token = create_access_token(
-        data={"sub": str(user.id), "username": user.username, "role": user.role},
-        expires_delta=access_token_expires,
-    )
-    new_refresh_token = create_refresh_token(data={"sub": str(user.id), "username": user.username})
+    # Blacklist old refresh token
+    if old_jti:
+        exp = payload.get("exp")
+        if exp:
+            expires_at = datetime.fromtimestamp(exp, tz=timezone.utc)
+            await blacklist_token(session, old_jti, int(user_id), expires_at)
+
+    access_token, new_refresh_token, _ = _create_tokens(user)
 
     return Token(access_token=access_token, refresh_token=new_refresh_token)
 
@@ -265,6 +403,7 @@ async def get_me(current_user: Annotated[User, Depends(get_current_user)]):
 async def update_me(
     user_data: UserUpdate,
     current_user: Annotated[User, Depends(get_current_user)],
+    request: Request,
     session: Annotated[AsyncSession, Depends(get_db)],
 ):
     """Update current user's profile information."""
@@ -279,6 +418,14 @@ async def update_me(
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Password attuale non corretta",
+            )
+
+        # Validate new password strength
+        password_errors = validate_password_strength(user_data.new_password)
+        if password_errors:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="; ".join(password_errors),
             )
 
     # Check username uniqueness
@@ -306,7 +453,77 @@ async def update_me(
         email=user_data.email,
         password=user_data.new_password,
     )
+
+    # Audit log
+    changes = {}
+    if user_data.username and user_data.username != current_user.username:
+        changes["username"] = {"old": current_user.username, "new": user_data.username}
+    if user_data.email and str(user_data.email) != current_user.email:
+        changes["email"] = {"old": current_user.email, "new": str(user_data.email)}
+    if user_data.new_password:
+        changes["password"] = "changed"
+
+    if changes:
+        await create_audit_log(
+            session,
+            action="profile_updated",
+            user_id=current_user.id,
+            username=current_user.username,
+            target_type="user",
+            target_id=current_user.id,
+            details=changes,
+            ip_address=_get_client_ip(request),
+        )
+
     return updated
+
+
+@router.delete("/me")
+async def delete_me(
+    delete_data: DeleteAccountRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    request: Request,
+    session: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Delete current user's account (self-service)."""
+    # Sysadmin cannot self-delete via this endpoint
+    if current_user.is_sysadmin:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Gli account sysadmin non possono essere eliminati da qui",
+        )
+
+    # Verify confirmation text
+    if delete_data.confirmation != "DELETE":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Conferma l'eliminazione digitando 'DELETE'",
+        )
+
+    # Verify password
+    if not verify_password(delete_data.password, current_user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Password non corretta",
+        )
+
+    # Audit log before deletion
+    await create_audit_log(
+        session,
+        action="account_self_deleted",
+        user_id=current_user.id,
+        username=current_user.username,
+        target_type="user",
+        target_id=current_user.id,
+        ip_address=_get_client_ip(request),
+    )
+
+    # Delete user
+    from src.services.auth_service import delete_user
+
+    await delete_user(session, current_user.id)
+
+    return {"detail": "Account eliminato con successo"}
 
 
 @router.get("/me/stats", response_model=UserStatsResponse)

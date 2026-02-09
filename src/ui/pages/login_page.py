@@ -256,8 +256,8 @@ class RegisterPage:
             self.error_label.visible = True
             return
 
-        if len(password) < 6:
-            self.error_label.text = "La password deve avere almeno 6 caratteri"
+        if len(password) < 8:
+            self.error_label.text = "La password deve avere almeno 8 caratteri"
             self.error_label.visible = True
             return
 

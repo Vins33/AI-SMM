@@ -58,10 +58,14 @@ ENV PYTHONUNBUFFERED=1 \
     LOG_JSON_FORMAT=true
 
 # Create non-root user for security
-RUN groupadd -r appgroup && useradd -r -g appgroup appuser
+RUN groupadd -r appgroup && useradd -r -g appgroup -m appuser
 
 # Create NiceGUI storage directory with correct permissions
 RUN mkdir -p /app/.nicegui && chown -R appuser:appgroup /app/.nicegui
+
+# Point yfinance/libs cache to /dev/null (no cache at all)
+ENV YF_CACHE_DIR=/dev/null
+ENV XDG_CACHE_HOME=/dev/null
 
 # Copy application code
 COPY --chown=appuser:appgroup . /app

@@ -17,8 +17,13 @@ Applicazione web per chattare con un agente finanziario AI basato su LangGraph, 
 - 💾 **Persistenza conversazioni** (PostgreSQL + LangGraph AsyncPostgresSaver)
 - 🎨 **UI moderna WhatsApp-style** con NiceGUI (dark theme, angoli smussati, responsive)
 - 🔐 **Autenticazione JWT** con ruoli (user, admin, sysadmin)
+  - Registrazione e login con validazione password forte
+  - Logout server-side con token blacklist (JTI)
+  - Account lockout dopo tentativi falliti
+  - Eliminazione account self-service
 - 👑 **Dashboard Admin** per sysadmin con:
-  - Gestione utenti (CRUD completo)
+  - Gestione utenti (CRUD completo) con ricerca e paginazione
+  - Audit log (login, logout, modifiche, azioni admin)
   - Esplorazione database
   - Esecuzione query SQL
   - Statistiche sistema
@@ -26,6 +31,12 @@ Applicazione web per chattare con un agente finanziario AI basato su LangGraph, 
   - Statistiche personali (conversazioni, messaggi, media, giorni attività)
   - Modifica profilo (username, email, password)
   - Insights e livello di utilizzo (Nuovo → Esperto)
+  - Zona pericolosa per eliminazione account
+- 🛡️ **Sicurezza**:
+  - Password validation server-side (maiuscola, minuscola, numero, carattere speciale, min 8 char)
+  - Endpoint legacy protetti con autenticazione
+  - Segreti (`SECRET_KEY`, `STORAGE_SECRET`, credenziali sysadmin) senza default nel codice — solo da `.env`
+  - Audit trail completo delle azioni utente e admin
 - ⚙️ **Prompt configurabili** via YAML
 - 🔧 **LLM configurabile** (context window, temperatura, keep-alive)
 - 🚀 **Production-ready** (Kubernetes, health checks, structured logging)

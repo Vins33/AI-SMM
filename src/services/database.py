@@ -34,7 +34,7 @@ async def get_db_session():
 async def init_db():
     """Initialize database tables."""
     # Import auth models to ensure they are registered with Base
-    from src.services.auth_models import User  # noqa: F401
+    from src.services.auth_models import AuditLog, TokenBlacklist, User  # noqa: F401
 
     async with async_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -55,6 +55,24 @@ async def init_db():
             )
             await conn.execute(
                 text("CREATE INDEX ix_conversations_user_id ON conversations (user_id)")
+            )
+
+    # Migration: add lockout columns to users if they don't exist
+    async with async_engine.begin() as conn:
+        from sqlalchemy import text
+
+        result = await conn.execute(
+            text(
+                "SELECT column_name FROM information_schema.columns "
+                "WHERE table_name='users' AND column_name='failed_login_attempts'"
+            )
+        )
+        if not result.fetchone():
+            await conn.execute(
+                text("ALTER TABLE users ADD COLUMN failed_login_attempts INTEGER DEFAULT 0 NOT NULL")
+            )
+            await conn.execute(
+                text("ALTER TABLE users ADD COLUMN locked_until TIMESTAMPTZ")
             )
 
     # Ensure sysadmin exists

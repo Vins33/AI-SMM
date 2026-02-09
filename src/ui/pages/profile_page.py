@@ -16,6 +16,8 @@ class ProfilePage:
         self.confirm_password_input = None
         self.error_label = None
         self.success_label = None
+        self.delete_password_input = None
+        self.delete_confirm_input = None
 
     def _get_auth_headers(self):
         """Get authorization headers."""
@@ -89,6 +91,11 @@ class ProfilePage:
                 # Activity insights (right)
                 with ui.column().classes("flex-1 min-w-[350px]"):
                     await self._render_insights_section()
+
+            # Danger zone - delete account (only for non-sysadmin)
+            role = app.storage.user.get("role", "user")
+            if role != "sysadmin":
+                await self._render_delete_account_section()
 
     async def _render_stats_section(self):
         """Render statistics cards."""
@@ -432,3 +439,79 @@ class ProfilePage:
 
             except Exception as e:
                 ui.label(f"Errore: {e}").classes("text-red-400")
+
+    async def _render_delete_account_section(self):
+        """Render the danger zone with account deletion."""
+        with ui.card().classes("w-full bg-[#2a1a1a] border border-red-900 p-6 rounded-xl"):
+            ui.label("⚠️ Zona Pericolosa").classes("text-xl font-bold text-red-400 mb-2")
+            ui.label(
+                "L'eliminazione dell'account è permanente. "
+                "Tutte le conversazioni e i dati verranno eliminati."
+            ).classes("text-gray-400 text-sm mb-4")
+
+            with ui.expansion("Elimina il mio account").classes("w-full text-red-400"):
+                self.delete_password_input = (
+                    ui.input("Password di conferma", password=True)
+                    .classes("w-full mb-3")
+                    .props("dark outlined color=red")
+                )
+
+                self.delete_confirm_input = (
+                    ui.input("Digita DELETE per confermare", placeholder="DELETE")
+                    .classes("w-full mb-4")
+                    .props("dark outlined color=red")
+                )
+
+                self.delete_error_label = ui.label("").classes("text-red-400 text-sm mb-2")
+                self.delete_error_label.visible = False
+
+                ui.button(
+                    "🗑️ Elimina Account Definitivamente",
+                    on_click=self._delete_account,
+                ).classes(
+                    "w-full bg-red-700 hover:bg-red-800 text-white py-3 rounded-lg font-semibold"
+                )
+
+    async def _delete_account(self):
+        """Handle account self-deletion."""
+        import httpx
+
+        self.delete_error_label.visible = False
+
+        password = self.delete_password_input.value
+        confirmation = self.delete_confirm_input.value
+
+        if not password:
+            self.delete_error_label.text = "Inserisci la password"
+            self.delete_error_label.visible = True
+            return
+
+        if confirmation != "DELETE":
+            self.delete_error_label.text = "Digita 'DELETE' per confermare"
+            self.delete_error_label.visible = True
+            return
+
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.request(
+                    "DELETE",
+                    "http://localhost:8000/api/v1/auth/me",
+                    headers=self._get_auth_headers(),
+                    json={"password": password, "confirmation": confirmation},
+                )
+
+                if response.status_code == 200:
+                    app.storage.user.clear()
+                    ui.notify("Account eliminato con successo", type="positive")
+                    ui.navigate.to("/login")
+                else:
+                    try:
+                        error = response.json().get("detail", "Errore")
+                    except Exception:
+                        error = f"Errore {response.status_code}"
+                    self.delete_error_label.text = str(error)
+                    self.delete_error_label.visible = True
+
+        except Exception as e:
+            self.delete_error_label.text = f"Errore: {e}"
+            self.delete_error_label.visible = True

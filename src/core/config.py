@@ -1,5 +1,3 @@
-import secrets
-
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -8,17 +6,29 @@ class Settings(BaseSettings):
 
     # App metadata
     APP_NAME: str = "financial-agent"
-    APP_VERSION: str = "2.1.0"
+    APP_VERSION: str = "2.2.0"
     ENVIRONMENT: str = "development"  # development, staging, production
 
     # Logging (K8s ready)
     LOG_LEVEL: str = "INFO"
     LOG_JSON_FORMAT: bool = True  # True for K8s, False for local dev
 
-    # Authentication
-    SECRET_KEY: str = secrets.token_urlsafe(32)
+    # Authentication (from .env — no defaults for secrets)
+    SECRET_KEY: str
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+
+    # Sysadmin credentials (from .env only)
+    SYSADMIN_USERNAME: str
+    SYSADMIN_EMAIL: str
+    SYSADMIN_PASSWORD: str
+
+    # Security
+    MAX_LOGIN_ATTEMPTS: int = 5
+    LOCKOUT_DURATION_MINUTES: int = 15
+    PASSWORD_MIN_LENGTH: int = 8
+    STORAGE_SECRET: str
 
     # Database
     DATABASE_URL: str
